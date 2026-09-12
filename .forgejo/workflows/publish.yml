@@ -1,0 +1,65 @@
+name: Publish to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate packages or publish them to crates.io
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - publish
+      package:
+        description: Publish all crates, or select one to resume a partial publication
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - textus-core
+          - textus
+          - cargo-textus
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: intensive-distro
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+      PUBLISH_PACKAGE: ${{ inputs.package }}
+    steps:
+      - name: Check out the selected commit
+        # actions/checkout v4.2.2; Node.js 20 is required by this action.
+        uses: https://github.com/actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ forgejo.sha }}
+          persist-credentials: false
+
+      - name: Check toolchain and code quality
+        run: |
+          unset TEXTUS_LANG
+          rustc --version
+          cargo --version
+          python3 -m unittest discover -s scripts/tests
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Verify crates.io packages without uploading
+        run: bash scripts/publish-crates.sh --dry-run --package "$PUBLISH_PACKAGE"
+
+      - name: Publish verified packages
+        if: ${{ inputs.mode == 'publish' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_CREDENTIAL_PROVIDER: cargo:token
+        run: bash scripts/publish-crates.sh --publish --package "$PUBLISH_PACKAGE"

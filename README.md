@@ -7,7 +7,7 @@ For Rustaceans who are truly serious about writing.
 
 ## 빠른 시작
 
-저장소 루트에서 CLI를 설치합니다. 아직 crates.io 배포를 전제로 하지 않습니다.
+저장소 루트에서 CLI를 설치합니다. 아래는 소스 checkout에서 설치하는 방법입니다.
 
 ```bash
 cargo install --path crates/cargo-textus
@@ -171,3 +171,9 @@ Unix에서는 테스트용 브라우저로 `open`과 `build --open`의 전달 �
 
 설계 근거: [Rust 속성 내 매크로 확장](https://doc.rust-lang.org/reference/attributes.html#meta-item-attribute-syntax),
 [Cargo 외부 명령](https://doc.rust-lang.org/cargo/reference/external-tools.html#custom-subcommands).
+
+## 배포
+
+Forgejo Actions에서 **Publish to crates.io**를 수동 실행하여 배포할 수 있습니다.
+러너 라벨은 `intensive-distro`이며, 인증은 `CARGO_REGISTRY_TOKEN` Secret을 사용합니다.
+설정 방법과 dry-run, 버전 갱신, 부분 배포 후 재실행은 [배포 가이드](docs/publishing.md)를 참고하세요.

@@ -3,6 +3,8 @@ name = "textus"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+readme.workspace = true
 description = "Opt-in macros for localized Rust documentation"
 
 [lib]

@@ -7,6 +7,8 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
+repository = "https://git.sonjaehyuk.me/SLIB/cargo-textus"
+readme = "README.md"
 
 [workspace.dependencies]
 textus-core = { path = "crates/textus-core", version = "0.1.0" }
