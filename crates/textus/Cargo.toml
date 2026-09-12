@@ -1,0 +1,14 @@
+[package]
+name = "textus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Opt-in macros for localized Rust documentation"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+textus-core.workspace = true
+syn.workspace = true
+quote.workspace = true
