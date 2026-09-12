@@ -10,7 +10,7 @@ push, 태그 생성, 릴리즈 생성으로 자동 배포하지 않습니다.
    도구를 준비합니다. 현재 프로젝트는 Rust 1.95.0으로 검증했습니다.
    checkout 액션은 Node.js 20 런타임을 사용하므로 러너 실행 환경에서 지원해야 합니다.
 3. crates.io에서 배포 권한이 있는 API 토큰을 발급합니다. 필요한 크레이트는
-   `textus-core`, `textus`, `cargo-textus`입니다. 최초 배포 시에는 새 크레이트를
+   `textus-core`, `cargo-textus`입니다. 최초 배포 시에는 새 크레이트를
    생성할 수 있는 권한이 필요하고, 이미 존재한다면 해당 크레이트 소유자의 권한이 필요합니다.
 4. Forgejo 저장소 **Settings → Actions → Secrets**에
    **`CARGO_REGISTRY_TOKEN`**이라는 이름으로 토큰을 저장합니다.
@@ -31,7 +31,7 @@ Secret을 주입하지 않습니다. `cargo login`이나 `--token`을 사용하�
 | 입력 | 기본값 | 의미 |
 | --- | --- | --- |
 | `mode` | `dry-run` | 패키징과 빌드 검증만 수행. `publish`를 선택하면 검증 후 업로드 |
-| `package` | `all` | 세 크레이트 전체 선택. 개별 이름을 선택하면 해당 크레이트만 처리 |
+| `package` | `all` | 두 크레이트 전체 선택. 개별 이름을 선택하면 해당 크레이트만 처리 |
 
 배포할 커밋이 있는 브랜치를 선택하고 `mode=publish`, `package=all`로 실행합니다.
 선택한 실행의 SHA를 checkout하며 버전은 해당 커밋의 `Cargo.toml`을 사용합니다.
@@ -41,22 +41,20 @@ Secret을 주입하지 않습니다. `cargo login`이나 `--token`을 사용하�
 
 1. `cargo fmt --all -- --check`
 2. `cargo clippy --workspace --all-targets --locked -- -D warnings`
-3. `cargo test --workspace --locked`
+3. `cargo test --workspace --locked`, 매크로 전용 `--no-default-features` 구성의 Clippy·테스트
 4. 선택한 크레이트들을 `cargo publish --dry-run --registry crates-io --locked`로 검증
 5. `mode=publish`인 경우 같은 선택으로 `cargo publish` 수행
 
 Cargo 1.90 이상의 다중 패키지 배포 기능이 내부 의존성을 고려합니다.
-먼저 `textus-core`가 배포되어야 `textus`와 `cargo-textus`를 배포할 수 있습니다.
+먼저 `textus-core`가 배포된 뒤 CLI와 매크로를 함께 담은 `cargo-textus`를 배포합니다.
 최초 배포의 dry-run도 아직 등록하지 않은 워크스페이스 의존성을 함께 검증합니다.
 `textus-demo`는 `publish = false`이며 스크립트의 배포 목록에도 포함하지 않습니다.
 
 ## 버전 갱신 및 재실행
 
-2026-09-12의 실제 dry-run에서 **`textus 0.1.0`이 이미 crates.io 인덱스에 존재함**을
-확인했습니다. dry-run은 이를 경고로 표시하고 패키징을 검증하지만, 실제 배포는
-거부합니다. 본인 소유 크레이트라면 새 버전으로, 본인 소유가 아니라면 사용 가능한
-패키지 이름으로 조정해야 합니다. 소유권은 이번 작업에서 확인하지 않았습니다.
-이름을 변경하면 Cargo 의존성과 스크립트·워크플로의 배포 목록도 함께 갱신해야 합니다.
+배포 패키지는 `textus-core`와 `cargo-textus`입니다. 매크로를 `cargo-textus`의
+라이브러리로 통합했으므로 이름이 충돌했던 별도 `textus` 패키지는 배포하지 않습니다.
+`cargo-textus`의 기본 `cli` feature를 포함해 바이너리와 매크로를 함께 검증합니다.
 
 - 다음 배포에서는 루트 `Cargo.toml`의 `[workspace.package].version`과
   `[workspace.dependencies].textus-core.version`을 함께 검토·갱신합니다.
@@ -77,6 +75,8 @@ Cargo 1.90 이상의 다중 패키지 배포 기능이 내부 의존성을 고�
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+cargo clippy -p cargo-textus --all-targets --no-default-features --locked -- -D warnings
+cargo test -p cargo-textus --no-default-features --locked
 python3 -m unittest discover -s scripts/tests
 bash scripts/publish-crates.sh --dry-run
 ```

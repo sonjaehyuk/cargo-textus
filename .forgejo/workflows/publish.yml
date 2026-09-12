@@ -19,7 +19,6 @@ on:
         options:
           - all
           - textus-core
-          - textus
           - cargo-textus
 
 concurrency:
@@ -53,6 +52,8 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --locked
+          cargo clippy -p cargo-textus --all-targets --no-default-features --locked -- -D warnings
+          cargo test -p cargo-textus --no-default-features --locked
 
       - name: Verify crates.io packages without uploading
         run: bash scripts/publish-crates.sh --dry-run --package "$PUBLISH_PACKAGE"

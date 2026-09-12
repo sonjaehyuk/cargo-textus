@@ -66,7 +66,7 @@ else:
         call = self.recorded()
         self.assertEqual(call["args"], [
             "publish", "--registry", "crates-io", "--locked", "--dry-run",
-            "--package", "textus-core", "--package", "textus", "--package", "cargo-textus",
+            "--package", "textus-core", "--package", "cargo-textus",
         ])
         self.assertFalse(call["token_present"])
         self.assertFalse(call["language_present"])
@@ -81,21 +81,22 @@ else:
     def test_explicit_publication_keeps_token_out_of_arguments_and_logs(self):
         token = "synthetic-test-token-not-a-credential"
         self.env["CARGO_REGISTRY_TOKEN"] = token
-        result = self.run_script("--publish", "--package", "textus", trace=True)
+        result = self.run_script("--publish", "--package", "cargo-textus", trace=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn(token, result.stdout + result.stderr + self.log.read_text())
         call = self.recorded()
         self.assertTrue(call["token_present"])
         self.assertEqual(call["args"], [
-            "publish", "--registry", "crates-io", "--locked", "--package", "textus",
+            "publish", "--registry", "crates-io", "--locked", "--package", "cargo-textus",
         ])
 
     def test_rejects_unknown_packages_and_ambiguous_modes(self):
         for args in [
             ("--package", "textus-demo"),
+            ("--package", "textus"),
             ("--package", "textus; echo injected"),
             ("--package",),
-            ("--package", "textus", "--package", "textus-core"),
+            ("--package", "cargo-textus", "--package", "textus-core"),
             ("--dry-run", "--publish"),
             ("--allow-dirty",),
         ]:

@@ -8,7 +8,7 @@ usage() {
 Usage: bash scripts/publish-crates.sh [--dry-run | --publish] [--package NAME]
 
 Default: --dry-run --package all (no upload and no token required).
-NAME: all, textus-core, textus, or cargo-textus.
+NAME: all, textus-core, or cargo-textus.
 --publish requires CARGO_REGISTRY_TOKEN in the environment.
 Requires Cargo >= 1.90. Run fmt, clippy, and tests first; the Forgejo workflow
 does this automatically. Cargo verifies the packaged sources in both modes.
@@ -51,10 +51,10 @@ while (($#)); do
 done
 
 case "$package" in
-    all) packages=(textus-core textus cargo-textus) ;;
-    textus-core|textus|cargo-textus) packages=("$package") ;;
+    all) packages=(textus-core cargo-textus) ;;
+    textus-core|cargo-textus) packages=("$package") ;;
     *)
-        echo 'Package must be all, textus-core, textus, or cargo-textus.' >&2
+        echo 'Package must be all, textus-core, or cargo-textus.' >&2
         exit 2
         ;;
 esac

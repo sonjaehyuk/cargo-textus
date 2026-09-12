@@ -13,8 +13,10 @@ name = "cargo-textus"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "quote",
  "serde",
  "serde_json",
+ "syn 2.0.119",
  "textus-core",
 ]
 
@@ -114,15 +116,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "textus"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn 2.0.119",
- "textus-core",
-]
-
-[[package]]
 name = "textus-core"
 version = "0.1.0"
 
@@ -130,7 +123,7 @@ version = "0.1.0"
 name = "textus-demo"
 version = "0.1.0"
 dependencies = [
- "textus",
+ "cargo-textus",
 ]
 
 [[package]]

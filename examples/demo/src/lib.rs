@@ -1,6 +1,6 @@
-#![doc = textus::include_doc!("docs/overview.md")]
+#![doc = cargo_textus::include_doc!("docs/overview.md")]
 
-#[doc = textus::include_doc!("docs/greet.md")]
+#[doc = cargo_textus::include_doc!("docs/greet.md")]
 pub fn greet() -> &'static str {
     "Hello!"
 }

@@ -20,14 +20,13 @@ impl Fixture {
         fs::create_dir_all(root.join("src")).unwrap();
         fs::create_dir(root.join("docs")).unwrap();
         let macro_crate = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../textus")
             .canonicalize()
             .unwrap();
         fs::write(
             root.join("Cargo.toml"),
             format!(
             "[workspace]\n[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\
-             [dependencies]\ntextus = {{ path = {} }}\n\
+             [dependencies]\ncargo-textus = {{ path = {}, default-features = false }}\n\
              [package.metadata.textus.i18n]\nlanguages = [\"en\", \"ko\"]\n",
             serde_json::to_string(&macro_crate).unwrap()
         ),
@@ -35,8 +34,8 @@ impl Fixture {
         .unwrap();
         fs::write(
             root.join("src/lib.rs"),
-            r##"#![doc = textus::include_doc!("docs/guide.md")]
-#[doc = textus::include_doc!(r#"docs/guide.md"#)]
+            r##"#![doc = cargo_textus::include_doc!("docs/guide.md")]
+#[doc = cargo_textus::include_doc!(r#"docs/guide.md"#)]
 pub fn greet() {}
 /// Ordinary documentation is preserved.
 #[doc = include_str!("../docs/builtin.md")]
@@ -47,9 +46,9 @@ pub mod nested;
         .unwrap();
         fs::write(
             root.join("src/nested.rs"),
-            r#"#[doc = textus::include_doc!("docs/guide.md")]
+            r#"#[doc = cargo_textus::include_doc!("docs/guide.md")]
 pub struct Nested {
-    #[doc = textus::include_doc!("docs/guide.md")]
+    #[doc = cargo_textus::include_doc!("docs/guide.md")]
     pub field: u8,
 }
 "#,
@@ -222,7 +221,7 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     // Malformed macro input is a useful compiler diagnostic, not a panic.
     fs::write(
         fixture.root.join("src/lib.rs"),
-        "#[doc = textus::include_doc!(123)]\npub struct Invalid;\n",
+        "#[doc = cargo_textus::include_doc!(123)]\npub struct Invalid;\n",
     )
     .unwrap();
     failure(fixture.cargo_doc(None), "expected string literal");
@@ -286,7 +285,7 @@ fn selects_workspace_packages_explicitly() {
     failure(command(&[]), "select one workspace package");
     failure(command(&["-p", "does-not-exist"]), "not found");
     failure(
-        command(&["-p", "textus"]),
+        command(&["-p", "cargo-textus"]),
         "missing [package.metadata.textus.i18n]",
     );
     let result = success(command(&["-p", "textus-demo"]));

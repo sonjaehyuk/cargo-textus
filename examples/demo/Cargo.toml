@@ -6,7 +6,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-textus = { path = "../../crates/textus" }
+cargo-textus = { path = "../../crates/cargo-textus", default-features = false }
 
 [package.metadata.textus.i18n]
 languages = ["en", "ko"]

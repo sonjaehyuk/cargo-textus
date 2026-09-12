@@ -20,21 +20,31 @@ cargo textus i18n open --lang ko --manifest-path examples/demo/Cargo.toml
 cargo run -p cargo-textus -- i18n build --lang ko -p textus-demo
 ```
 
-다른 Rust 프로젝트에서는 `textus` 매크로 크레이트를 **일반 의존성**으로 등록하고,
+다른 Rust 프로젝트에서는 `cargo-textus`를 **일반 의존성**으로 등록하고,
 지원하는 언어를 선언합니다. 아래 경로를 실제 checkout 경로로 바꾸세요.
 
 ```toml
 [dependencies]
-textus = { path = "/path/to/cargo-textus/crates/textus" }
+cargo-textus = { path = "/path/to/cargo-textus/crates/cargo-textus", default-features = false }
 
 [package.metadata.textus.i18n]
 languages = ["en", "ko"]
 ```
 
+`cargo-textus` 패키지는 `cargo-textus` 바이너리와 `cargo_textus` 절차적 매크로
+라이브러리를 함께 제공합니다. 기본 활성화되는 `cli` feature가 바이너리와 CLI 전용
+의존성을 포함하므로 `cargo install`은 추가 옵션 없이 동작합니다. 매크로만 사용할
+때는 위 예시처럼 `default-features = false`로 CLI 전용 의존성을 제외할 수 있습니다.
+
+기존 `textus` 의존성은 `cargo-textus`로, `textus::include_doc!` 호출은
+`cargo_textus::include_doc!`로 변경하세요. CLI 명령 `cargo textus`, 설정의
+`package.metadata.textus.i18n`, 문서 파일명 규칙은 동일합니다. 별도 `textus`
+패키지는 더 이상 배포하지 않습니다.
+
 ## 문서 작성
 
 ```rust
-#[doc = textus::include_doc!("docs/guide.md")]
+#[doc = cargo_textus::include_doc!("docs/guide.md")]
 pub fn example() {}
 ```
 
@@ -65,9 +75,9 @@ my-crate/
 크레이트 설명, 함수, 타입, 필드 등 기존 `doc` 속성이 가능한 위치에서 사용합니다.
 
 ```rust
-#![doc = textus::include_doc!("docs/overview.md")]
+#![doc = cargo_textus::include_doc!("docs/overview.md")]
 
-#[doc = textus::include_doc!("docs/greet.md")]
+#[doc = cargo_textus::include_doc!("docs/greet.md")]
 pub fn greet() -> &'static str {
     "Hello!"
 }
@@ -120,7 +130,7 @@ cargo textus i18n open --lang ko
 1. CLI가 `cargo metadata --format-version 1 --no-deps`로 패키지와 설정을 읽습니다.
 2. 선택한 언어를 검증하고, 자식 Cargo 프로세스에만 `TEXTUS_LANG=ko`를 전달합니다.
 3. 전용 target 디렉터리에서 `cargo clean --doc` 후 `cargo doc --no-deps`를 실행합니다.
-4. `textus::include_doc!`가 `.ko` 파일명을 생성하고 기본 `include_str!`로 확장됩니다.
+4. `cargo_textus::include_doc!`가 `.ko` 파일명을 생성하고 기본 `include_str!`로 확장됩니다.
 5. rustdoc이 사용자가 작성한 설명과 Rust API 정보를 합쳐 HTML을 생성합니다.
 
 언어는 매크로 **크레이트 컴파일 시점**의 `option_env!("TEXTUS_LANG")`로 읽습니다.
@@ -151,17 +161,21 @@ cargo fmt --all
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo clippy -p cargo-textus --all-targets --no-default-features -- -D warnings
+cargo test -p cargo-textus --no-default-features
+python3 -m unittest discover -s scripts/tests
 ```
 
 통합 테스트는 실제 Cargo/rustdoc을 실행하므로 Rust 도구 체인과 의존성 캐시가
 필요합니다. 내부 Cargo 명령은 `--offline`으로 실행합니다. 한국어 생성, 일반
 `include_str!` 보존, 언어 전환, 파일 수정 및 누락, CLI와 패키지 선택을 확인합니다.
 Unix에서는 테스트용 브라우저로 `open`과 `build --open`의 전달 경로도 검사합니다.
+매크로 전용 테스트는 `--no-default-features`에서도 실행됩니다. 절차적 매크로
+라이브러리는 일반 공개 함수·타입 API를 내보내지 않으며 공통 로직은 `textus-core`에 둡니다.
 
 | 디렉터리 | 책임 |
 | --- | --- |
-| `crates/cargo-textus` | CLI, Cargo 호출, 패키지 설정, i18n 실행 |
-| `crates/textus` | 사용자용 `include_doc!` 절차적 매크로 |
+| `crates/cargo-textus` | CLI 바이너리와 `cargo_textus::include_doc!` 절차적 매크로 라이브러리 |
 | `crates/textus-core` | 언어 코드 검증과 문서 경로 선택 |
 | `examples/demo` | 기본·영어·한국어 문서가 있는 실행 예제 |
 

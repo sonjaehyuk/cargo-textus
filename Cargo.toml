@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/cargo-textus", "crates/textus-core", "crates/textus", "examples/demo"]
-default-members = ["crates/cargo-textus", "crates/textus", "crates/textus-core"]
+members = ["crates/cargo-textus", "crates/textus-core", "examples/demo"]
+default-members = ["crates/cargo-textus", "crates/textus-core"]
 resolver = "2"
 
 [workspace.package]

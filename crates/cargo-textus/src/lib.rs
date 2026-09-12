@@ -1,8 +1,11 @@
 //! Opt-in, file-based localized documentation without replacing Rust built-ins.
 //!
-//! `#[doc = textus::include_doc!("docs/guide.md")]` uses `docs/guide.md`
+//! `#[doc = cargo_textus::include_doc!("docs/guide.md")]` uses `docs/guide.md`
 //! normally and `docs/guide.ko.md` when built through textus with `--lang ko`.
 //! Paths are relative to the consuming package's `Cargo.toml`.
+//!
+//! The `cargo-textus` package also provides the Cargo CLI, enabled by the
+//! default `cli` feature. Macro-only consumers can disable default features.
 
 use proc_macro::TokenStream;
 use quote::quote;
