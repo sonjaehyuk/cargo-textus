@@ -122,6 +122,36 @@ pub fn greet() {}
 `examples/demo`에서 두 매크로를 함께 사용하는 예제를 확인할 수 있습니다.
 두 방식 모두 rustdoc API 설명을 포함하며 별도 안내 문서를 여는 기능은 아닙니다.
 
+## 전체 문서 렌더링
+
+Mermaid와 `$수식$`을 별도 매크로 없이 전체 rustdoc API 페이지에서 렌더링할 수 있습니다.
+
+```bash
+cargo textus render build
+cargo textus render open
+cargo textus render build --lang ko
+# 저장소의 독립 예제
+cargo run -p cargo-textus -- render open -p textus-render-demo
+```
+
+일반 문서에 `mermaid` 코드 블록과 `$E = mc^2$`, `$$x^2$$`를 작성합니다.
+textus는 공통 JS/CSS를 주입하고, 구문 해석은 브라우저의 Mermaid·KaTeX가 담당합니다.
+라이브러리·폰트는 함께 배포하므로 생성된 문서를 오프라인에서도 열 수 있습니다.
+
+```toml
+[package.metadata.textus.render]
+mermaid = true
+math = true
+css = ["docs/custom.css"]
+js = ["docs/custom.js"]
+```
+
+설정은 선택 사항이며 기본적으로 두 렌더러를 활성화합니다. 사용자 CSS/JS는 패키지
+기준 파일이며 전체 페이지에 적용합니다. `--lang`을 지정할 때만 기존 i18n 설정이
+필요합니다. 첫 구현은 한 패키지의 라이브러리 타깃을 지원합니다. Mermaid Tiny의
+일부 다이어그램 종류는 지원하지 않으며 Markdown 처리 중 변형된 TeX는 복원하지 않습니다.
+[사용법·설계·제한 및 검증 방법](docs/rustdoc-rendering-plan.md)을 확인하세요.
+
 ## CLI
 
 ```bash
