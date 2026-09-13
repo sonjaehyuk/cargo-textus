@@ -40,3 +40,24 @@ pub fn include_str(input: TokenStream) -> TokenStream {
             .into(),
     }
 }
+
+mod directory;
+
+/// Include the default file or the same filename in a language's directory.
+///
+/// ```ignore
+/// #[doc = cargo_textus::include_str_from_dir!(
+///     "docs/guide.md", ko = "docs/ko", en = "translations/english",
+/// )]
+/// pub fn example() {}
+/// ```
+///
+/// Paths are relative to the consuming package's Cargo.toml. Language keys must
+/// be assigned lowercase ISO 639-1 codes, unique within the invocation. At least
+/// one mapping is required. Without a selected language the default file is used;
+/// missing mappings or files cause errors, without fallback. A directory may end
+/// in `/`. Only the default file's basename is appended to the mapped directory.
+#[proc_macro]
+pub fn include_str_from_dir(input: TokenStream) -> TokenStream {
+    directory::expand(input, LANGUAGE)
+}

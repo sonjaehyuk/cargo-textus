@@ -303,3 +303,40 @@ fn selects_workspace_packages_explicitly() {
     let result = success(command(&["--manifest-path", "examples/demo/Cargo.toml"]));
     assert_eq!(String::from_utf8(result.stdout).unwrap(), "en\nko\n");
 }
+
+#[test]
+fn directory_documents_rebuild_and_report_missing_mappings_and_files() {
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.root.join("docs/ko")).unwrap();
+    fs::create_dir(fixture.root.join("docs/english")).unwrap();
+    fs::write(
+        fixture.root.join("docs/ko/guide.md"),
+        "Directory Korean marker",
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("docs/english/guide.md"),
+        "Directory English marker",
+    )
+    .unwrap();
+    fs::write(fixture.root.join("src/lib.rs"), r#"#![doc = cargo_textus::include_str_from_dir!("docs/guide.md", ko = "docs/ko/", en = "docs/english")]
+"#).unwrap();
+    for (language, marker) in [
+        (None, "Default guide marker"),
+        (Some("ko"), "Directory Korean marker"),
+        (Some("en"), "Directory English marker"),
+        (None, "Default guide marker"),
+    ] {
+        success(fixture.cargo_doc(language));
+        assert!(fixture.html(None, "index.html").contains(marker));
+    }
+    failure(
+        fixture.cargo_doc(Some("ja")),
+        "no document directory registered",
+    );
+    fs::remove_file(fixture.root.join("docs/ko/guide.md")).unwrap();
+    failure(
+        fixture.cli(&["check", "--lang", "ko"]).output().unwrap(),
+        "docs/ko/guide.md",
+    );
+}

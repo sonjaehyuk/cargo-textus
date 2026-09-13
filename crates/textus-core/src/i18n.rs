@@ -47,6 +47,55 @@ pub fn document_path(path: &str, language: Option<&str>) -> Result<String, Strin
     }
 }
 
+/// Select the default file, or its basename within an explicitly mapped directory.
+/// All paths are package-relative; mappings are validated even when unselected.
+pub fn directory_document_path(
+    path: &str,
+    directories: &[(&str, &str)],
+    language: Option<&str>,
+) -> Result<String, String> {
+    document_path(path, None)?;
+    if directories.is_empty() {
+        return Err("at least one language directory mapping is required".into());
+    }
+    for (index, &(code, directory)) in directories.iter().enumerate() {
+        validate_language(code)?;
+        if directories[..index]
+            .iter()
+            .any(|&(previous, _)| previous == code)
+        {
+            return Err(format!("duplicate language directory mapping for {code:?}"));
+        }
+        // A single trailing slash is accepted for directory notation.
+        let directory = directory.strip_suffix('/').unwrap_or(directory);
+        if directory.is_empty()
+            || directory.starts_with('/')
+            || directory.contains(['\\', ':'])
+            || directory
+                .split('/')
+                .any(|part| part.is_empty() || part == "..")
+        {
+            return Err(
+                "language directory must be a nonempty package-relative path using /, without .."
+                    .into(),
+            );
+        }
+    }
+    let Some(language) = language else {
+        return Ok(path.to_owned());
+    };
+    validate_language(language)?;
+    let directory = directories
+        .iter()
+        .find_map(|&(code, directory)| (code == language).then_some(directory))
+        .ok_or_else(|| format!("no document directory registered for language {language:?}"))?;
+    let filename = path.rsplit('/').next().unwrap();
+    Ok(format!(
+        "{}/{filename}",
+        directory.strip_suffix('/').unwrap_or(directory)
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +155,63 @@ mod tests {
             assert!(document_path(path, Some("ko")).is_err(), "{path}");
         }
         assert!(document_path("a.md", Some("zz")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod directory_tests {
+    use super::directory_document_path as select;
+
+    #[test]
+    fn selects_basename_and_explicit_directory() {
+        let mappings = [("ko", "docs/ko/"), ("en", "translations/english")];
+        assert_eq!(
+            select("docs/nested/api.guide.md", &mappings, None).unwrap(),
+            "docs/nested/api.guide.md"
+        );
+        assert_eq!(
+            select("docs/nested/api.guide.md", &mappings, Some("ko")).unwrap(),
+            "docs/ko/api.guide.md"
+        );
+        assert_eq!(
+            select("docs/안내.md", &mappings, Some("en")).unwrap(),
+            "translations/english/안내.md"
+        );
+        assert!(
+            select("a.md", &mappings, Some("ja"))
+                .unwrap_err()
+                .contains("no document directory registered")
+        );
+        assert!(
+            select("a.md", &mappings, Some("zz"))
+                .unwrap_err()
+                .contains("invalid ISO 639-1")
+        );
+    }
+
+    #[test]
+    fn validates_all_mappings_even_without_language_selection() {
+        assert!(select("a.md", &[], None).is_err());
+        assert!(select("a.md", &[("ko", "ko"), ("ko", "other")], None).is_err());
+        for code in ["zz", "KO", "kor", "ko-KR"] {
+            assert!(select("a.md", &[(code, "ko")], None).is_err());
+        }
+        for directory in [
+            "",
+            "/",
+            "/ko",
+            "../ko",
+            "docs/../ko",
+            "docs//ko",
+            "ko//",
+            "C:/ko",
+            "docs\\ko",
+        ] {
+            assert!(
+                select("a.md", &[("ko", directory)], None).is_err(),
+                "{directory}"
+            );
+        }
+        assert!(select("../a.md", &[("ko", "ko")], None).is_err());
     }
 }
