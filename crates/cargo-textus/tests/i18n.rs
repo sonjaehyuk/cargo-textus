@@ -388,6 +388,23 @@ fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
     );
     fs::remove_file(fixture.root.join("extra assets/custom.js")).unwrap();
     failure(command.output().unwrap(), "could not read render asset");
+    fs::write(
+        fixture.root.join("extra assets/custom.js"),
+        "window.customLoaded = true;",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        manifest.replace(
+            "[package.metadata.textus.render]",
+            "[package.metadata.textus.render]\nalerts = false",
+        ),
+    )
+    .unwrap();
+    success(command.output().unwrap());
+    let html = fs::read_to_string(doc.join("fixture/index.html")).unwrap();
+    assert!(html.contains("\"alerts\":false"));
 }
 
 #[cfg(unix)]

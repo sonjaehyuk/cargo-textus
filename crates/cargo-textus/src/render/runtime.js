@@ -1,10 +1,11 @@
-// rustdoc가 만든 문서 DOM을 라이브러리에 연결한다. Markdown이나 수식 구문을 직접 파싱하지 않는다.
+// rustdoc가 만든 문서 DOM에 전역 렌더링을 적용한다. Markdown이나 수식 구문을 직접 파싱하지 않는다.
 (() => {
     if (window.__textusRender) return;
     window.__textusRender = true;
     const config = __TEXTUS_CONFIG__;
     // 라이브러리 로딩 실패도 문서 본문은 그대로 남겨 읽을 수 있게 한다.
     const report = (error) => console.error("textus rendering:", error);
+    __TEXTUS_ALERTS__
     const start = async () => {
         const root = document.querySelector('meta[name="rustdoc-vars"]')?.dataset.rootPath;
         if (root === undefined) { report("rustdoc root path is missing"); return; }
@@ -24,8 +25,10 @@
             document.head.append(element);
         };
         if (config.math) style("katex.css");
+        if (config.alerts) style("alerts.css");
         for (const name of config.css) style(name);
         const docs = [...document.querySelectorAll(".docblock")];
+        if (config.alerts) renderAlerts(docs);
         // 라이브러리별 실패를 분리하여 한 기능의 오류가 다른 기능을 막지 않게 한다.
         await Promise.all([
             (async () => {

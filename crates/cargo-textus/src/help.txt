@@ -35,5 +35,6 @@ No macros or i18n metadata are needed unless --lang is specified.
 Optional configuration: [package.metadata.textus.render]
   mermaid = true
   math = true
+  alerts = true
   css = ["docs/custom.css"]
   js = ["docs/custom.js"]
