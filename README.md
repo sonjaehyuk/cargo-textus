@@ -37,14 +37,14 @@ languages = ["en", "ko"]
 때는 위 예시처럼 `default-features = false`로 CLI 전용 의존성을 제외할 수 있습니다.
 
 기존 `textus` 의존성은 `cargo-textus`로, `textus::include_doc!` 호출은
-`cargo_textus::include_doc!`로 변경하세요. CLI 명령 `cargo textus`, 설정의
+`cargo_textus::include_str!`로 변경하세요. CLI 명령 `cargo textus`, 설정의
 `package.metadata.textus.i18n`, 문서 파일명 규칙은 동일합니다. 별도 `textus`
 패키지는 더 이상 배포하지 않습니다.
 
 ## 문서 작성
 
 ```rust
-#[doc = cargo_textus::include_doc!("docs/guide.md")]
+#[doc = cargo_textus::include_str!("docs/guide.md")]
 pub fn example() {}
 ```
 
@@ -75,13 +75,52 @@ my-crate/
 크레이트 설명, 함수, 타입, 필드 등 기존 `doc` 속성이 가능한 위치에서 사용합니다.
 
 ```rust
-#![doc = cargo_textus::include_doc!("docs/overview.md")]
+#![doc = cargo_textus::include_str!("docs/overview.md")]
 
-#[doc = cargo_textus::include_doc!("docs/greet.md")]
+#[doc = cargo_textus::include_str!("docs/greet.md")]
 pub fn greet() -> &'static str {
     "Hello!"
 }
 ```
+
+## 디렉토리별 문서 작성
+
+기존 `include_str!`는 파일명에 언어 코드를 삽입하는 기본 방식으로 유지합니다.
+디렉토리를 나누려면 새 매크로에서 언어와 디렉토리를 명시적으로 연결합니다.
+
+```rust
+#[doc = cargo_textus::include_str_from_dir!(
+    "docs/greet.md",
+    ko = "docs/ko/",
+    en = "translations/english",
+)]
+pub fn greet() {}
+```
+
+| 언어 선택 | 포함되는 파일 |
+| --- | --- |
+| 없음 | `docs/greet.md` |
+| `--lang ko` | `docs/ko/greet.md` |
+| `--lang en` | `translations/english/greet.md` |
+
+기본 경로와 디렉토리는 모두 호출 패키지의 `Cargo.toml` 기준입니다.
+디렉토리에 기본 파일의 **파일명 전체**를 붙입니다. 예를 들어 기본 경로가
+`docs/api/greet.md`여도 `ko = "docs/ko"`는 `docs/ko/greet.md`를 선택합니다.
+확장자 앞에 언어 코드를 추가하지 않습니다. 디렉토리 끝의 `/` 하나는 허용합니다.
+절대 경로, 빈 디렉토리, `..`, 역슬래시, 빈 경로 구간은 허용하지 않습니다.
+기본 파일 경로에는 기존 매크로와 동일하게 파일명과 확장자가 필요합니다.
+
+최소 하나의 매핑이 필요하며, 키는 실제 배정된 소문자 ISO 639-1 코드입니다.
+중복 키와 잘못된 코드·경로는 해당 언어를 선택하지 않아도 컴파일 오류입니다.
+선택한 언어의 매핑이 없거나 선택한 파일이 없으면 오류를 내며 자동 대체하지 않습니다.
+언어 미선택 시에는 기본 파일만 포함합니다. 선택하지 않은 파일의 존재 여부는 검사하지 않습니다.
+
+이 문법은 이번 구현에서 채택한 설계입니다. 언어 코드와 디렉토리 이름을 분리해
+`ko = "translations/korean"`처럼 기존 문서 구조를 사용할 수 있게 했습니다.
+매핑은 각 호출에 명시하며 metadata의 `languages`는 계속 CLI의 지원 언어 선언으로
+사용합니다. CLI로 빌드하려면 해당 언어를 metadata에도 등록해야 합니다.
+`examples/demo`에서 두 매크로를 함께 사용하는 예제를 확인할 수 있습니다.
+두 방식 모두 rustdoc API 설명을 포함하며 별도 안내 문서를 여는 기능은 아닙니다.
 
 ## CLI
 
@@ -130,7 +169,7 @@ cargo textus i18n open --lang ko
 1. CLI가 `cargo metadata --format-version 1 --no-deps`로 패키지와 설정을 읽습니다.
 2. 선택한 언어를 검증하고, 자식 Cargo 프로세스에만 `TEXTUS_LANG=ko`를 전달합니다.
 3. 전용 target 디렉터리에서 `cargo clean --doc` 후 `cargo doc --no-deps`를 실행합니다.
-4. `cargo_textus::include_doc!`가 `.ko` 파일명을 생성하고 기본 `include_str!`로 확장됩니다.
+4. 매크로가 파일명 접미사 또는 명시한 언어별 디렉토리로 경로를 선택하고 기본 `include_str!`로 확장됩니다.
 5. rustdoc이 사용자가 작성한 설명과 Rust API 정보를 합쳐 HTML을 생성합니다.
 
 언어는 매크로 **크레이트 컴파일 시점**의 `option_env!("TEXTUS_LANG")`로 읽습니다.
@@ -175,7 +214,7 @@ Unix에서는 테스트용 브라우저로 `open`과 `build --open`의 전달 �
 
 | 디렉터리 | 책임 |
 | --- | --- |
-| `crates/cargo-textus` | CLI 바이너리와 `cargo_textus::include_doc!` 절차적 매크로 라이브러리 |
+| `crates/cargo-textus` | CLI 바이너리와 `cargo_textus::include_str!` 절차적 매크로 라이브러리 |
 | `crates/textus-core` | 언어 코드 검증과 문서 경로 선택 |
 | `examples/demo` | 기본·영어·한국어 문서가 있는 실행 예제 |
 
