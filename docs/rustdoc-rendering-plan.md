@@ -1,6 +1,6 @@
 # 전체 rustdoc 렌더링
 
-상태: 전체 페이지 적용 방식의 첫 구현. 작업 브랜치는 `rustdoc-rendering`이다.
+상태: 작업 중심 CLI로 통합한 전체 페이지 렌더링 구현. 작업 브랜치는 `rustdoc-rendering`이다.
 이전 계획의 `doc_assets!`·`render_doc!` 개별 문서 매크로는 채택하지 않았다.
 
 ## 책임 분리
@@ -21,19 +21,20 @@ KaTeX의 `renderMathInElement`가 수행하며 자체 수식 파서는 두지 �
 ## 사용법
 
 ```bash
-cargo textus render build
-cargo textus render open
-cargo textus render build --open
-cargo textus render build --lang ko
+cargo textus build
+cargo textus open
+cargo textus check
+cargo textus languages
+cargo textus build --lang ko
 # 저장소 예제: 별도 매크로나 cargo-textus 의존성이 없는 라이브러리
-cargo run -p cargo-textus -- render open -p textus-render-demo
+cargo run -p cargo-textus -- open -p textus-render-demo
 ```
 
 첫 구현은 한 패키지의 **라이브러리 타깃 전체 API 페이지**를 생성한다.
 크레이트·모듈·함수·타입·필드 문서에 공통 초기화 코드가 들어간다. 의존성의 API 문서,
 바이너리만 있는 패키지, 워크스페이스 전체 일괄 생성은 현재 범위가 아니다.
 `--manifest-path`, `--package`/`-p`, `--offline`, `--locked`를 지원한다.
-`render`에는 `list`·`check`가 없다. 일반 `cargo doc`에는 자동 적용되지 않는다.
+생성 작업은 `build`·`open`·`check`로 통일했다. 일반 `cargo doc`에는 자동 적용되지 않는다.
 
 일반 주석 또는 기존에 포함하던 Markdown에 다음처럼 작성한다.
 
@@ -110,13 +111,15 @@ CSS/JS를 추가로 작성할 필요 없이 전체 API 페이지의 문서 영�
 
 ## i18n 조합과 빌드
 
-`render build --lang ko`는 기존 언어 코드 및 지원 언어 등록을 검증한 다음,
+`build --lang ko`는 기존 언어 코드 및 지원 언어 등록을 검증한 다음,
 자식 Cargo에 `TEXTUS_LANG=ko`를 전달한다. 기존 i18n 매크로가 문서 파일을 선택하고
 생성된 모든 API 페이지에 같은 렌더링 헤더가 적용된다. 언어 미지정 시 i18n metadata가
 필요 없으며 부모 환경의 `TEXTUS_LANG`도 자식에서 제거해 기본 문서를 사용한다.
-기존 `i18n` 명령과 매크로 동작은 바꾸지 않는다.
+기존 i18n 매크로 동작은 유지한다. 이전 i18n/render 명령 계층은 제거했다.
+`check`는 기본 문서와 모든 등록 언어를, `check --lang ko`는 한국어만 같은 경로로 검사한다.
+`languages`는 추가 언어 목록만 출력하며 설정이 없으면 빈 결과로 성공한다.
 
-산출물은 `<Cargo target>/textus/render/<패키지>/<언어 또는 default>/doc`에 생성한다.
+산출물은 `<Cargo target>/textus/<패키지>/<언어 또는 default>/doc`에 생성한다.
 Cargo 빌드 타깃 설정에 따라 `doc` 앞에 triple 경로가 추가될 수 있다.
 공통 자산은 각 문서 루트의 `textus-assets/`에 한 번만 복사하며 각 페이지는
 rustdoc의 `data-root-path`를 이용해 중첩 깊이에 맞는 경로로 로드한다.
@@ -175,7 +178,7 @@ Rust 테스트는 CLI 구분, 설정 검증, 기존 i18n 회귀, 전체 페이�
 ```bash
 cargo test --workspace
 cargo test -p cargo-textus --no-default-features
-cargo run -p cargo-textus -- render build -p textus-render-demo --offline
+cargo run -p cargo-textus -- build -p textus-render-demo --offline
 npm ci --prefix scripts/render-browser
 npx --prefix scripts/render-browser playwright install chromium
 node scripts/render-browser/test.cjs

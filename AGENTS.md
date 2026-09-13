@@ -6,7 +6,8 @@
 - 첫 번째 기능은 i18n이다. 사용자가 직접 작성하거나 지정한 언어별 문서를 선택하고 열 수 있도록 한다.
 - 자동 번역 도구가 아니다. 번역 생성이나 외부 번역 서비스 연동을 기본 기능으로 추가하지 않는다.
 - 한국어를 요청하면 사용자가 지정한 한국어 문서를 제공하는 것이 핵심 사용 사례다.
-- CLI는 `cargo textus i18n open --lang ko` 형태로 확정했다. `list`, `check`, `build --lang ko`, `build --lang ko --open`도 같은 명령 계층을 따른다.
+- CLI는 `cargo textus build/open/check/languages`로 통일한다. `--lang`은 build/open/check의 선택 옵션이며 languages에는 허용하지 않는다. 이전 i18n/render 계층, list, build --open은 별칭 없이 제거하고 새 명령을 안내한다.
+- build/open은 언어 미지정 시 기본 문서를, check는 기본 문서와 모든 등록 언어를 검사한다. 명시한 언어는 등록 여부를 검증한다. 모든 생성 작업은 동일한 렌더링 설정을 사용한다.
 - 사용자가 명시적으로 사용하는 textus 전용 매크로로 문서 파일을 선택한다. 기본 `include_str!`를 덮어쓰거나 `doc` 속성의 의미를 바꾸거나 사용자 소스를 치환하지 않는다.
 - 그 외 세부 문법과 설정은 초안 구현의 결정과 사용자 확정 요구사항을 구분한다.
 - 앞으로 i18n 이외의 기능이 추가될 수 있음을 고려한다.
@@ -28,8 +29,9 @@
 
 - i18n 기능 개발은 이번 범위에서 완료했다. 기존 구현과 문서 선택 규칙은 유지하며 새 기능을 위해 i18n의 동작을 재설계하지 않는다.
 - 현재 작업은 기존 코드베이스에서 rustdoc 전체 API 문서의 렌더링을 확장하는 것이다. Mermaid와 `$수식$` 처리는 전체 페이지에 공통 자산을 주입하고 브라우저 라이브러리가 수행하도록 한다. textus가 개별 Markdown이나 TeX를 파싱하는 방향으로 확장하지 않는다.
-- 현재 구현은 `cargo textus render build/open`과 `[package.metadata.textus.render]`를 사용한다. 사용자 CSS/JS도 패키지 전체 설정으로 지정하며 개별 문서 매크로는 추가하지 않는다. 구현한 범위와 제한은 [렌더링 설계](docs/rustdoc-rendering-plan.md)에 기록한다.
-- 새 기능은 i18n과 분리된 모듈에서 개발하고 기존 매크로와 함께 사용할 수 있게 한다. 공통화는 실제 필요한 범위로 한정한다.
+- 현재 구현은 작업 중심 CLI와 `[package.metadata.textus.render]`를 사용한다. 사용자 CSS/JS도 패키지 전체 설정으로 지정하며 개별 문서 매크로는 추가하지 않는다. 구현한 범위와 제한은 [렌더링 설계](docs/rustdoc-rendering-plan.md)에 기록한다.
+- CLI 작업 분배는 document 모듈, 전체 문서 생성은 render 모듈로 통합한다. 언어·문서 선택 매크로와 코어는 유지하며 기능별 중복 Cargo 빌드 경로를 만들지 않는다.
+- i18n 설정은 선택 사항이다. 미설정이면 기본 문서 생성·검사와 빈 languages 출력이 가능하다. 설정이 있으면 모든 명령에서 언어 목록을 검증한다. textus 산출물은 `<target>/textus/<패키지>/<default 또는 언어>/doc`에 둔다.
 
 ## 브랜치와 커밋
 

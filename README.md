@@ -11,13 +11,13 @@ For Rustaceans who are truly serious about writing.
 
 ```bash
 cargo install --path crates/cargo-textus
-cargo textus i18n open --lang ko --manifest-path examples/demo/Cargo.toml
+cargo textus open --lang ko --manifest-path examples/demo/Cargo.toml
 ```
 
 설치 없이 예제를 빌드할 수도 있습니다.
 
 ```bash
-cargo run -p cargo-textus -- i18n build --lang ko -p textus-demo
+cargo run -p cargo-textus -- build --lang ko -p textus-demo
 ```
 
 다른 Rust 프로젝트에서는 `cargo-textus`를 **일반 의존성**으로 등록하고,
@@ -127,11 +127,11 @@ pub fn greet() {}
 Mermaid와 `$수식$`을 별도 매크로 없이 전체 rustdoc API 페이지에서 렌더링할 수 있습니다.
 
 ```bash
-cargo textus render build
-cargo textus render open
-cargo textus render build --lang ko
+cargo textus build
+cargo textus open
+cargo textus build --lang ko
 # 저장소의 독립 예제
-cargo run -p cargo-textus -- render open -p textus-render-demo
+cargo run -p cargo-textus -- open -p textus-render-demo
 ```
 
 일반 문서에 `mermaid` 코드 블록과 `$E = mc^2$`, `$$x^2$$`를 작성합니다.
@@ -159,43 +159,57 @@ GitHub 형식의 `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION
 
 ## CLI
 
+명령은 **할 일**, `--lang`은 **문서 선택**, `metadata.textus.render`는 **표시 방식**입니다.
+i18n과 렌더링을 별도로 조합할 필요 없이 모든 생성 명령이 같은 설정을 적용합니다.
+
 ```bash
-cargo textus i18n list
-cargo textus i18n check
-cargo textus i18n check --lang ko
-cargo textus i18n build --lang ko
-cargo textus i18n build --lang ko --open
-cargo textus i18n open --lang ko
+cargo textus build
+cargo textus open
+cargo textus check
+cargo textus languages
+cargo textus open --lang ko
+cargo textus check --lang ko
 ```
 
 | 명령 | 동작 |
 | --- | --- |
-| `list` | 패키지 설정에 등록된 언어 출력. 파일 존재 여부는 검사하지 않음 |
-| `check` | 모든 등록 언어로 실제 rustdoc 빌드 수행 |
-| `check --lang ko` | 한국어 rustdoc 빌드로 파일 포함과 매크로 확장 검사 |
-| `build --lang ko` | 한국어 API 문서 생성 |
-| `open --lang ko` | 빌드 성공 후 Cargo의 `--open`으로 문서 열기 |
+| `build` | 기본 문서를 렌더링 설정과 함께 생성 |
+| `open` | 기본 문서를 생성하고 자산 배치 후 브라우저로 열기 |
+| `check` | 기본 문서부터 모든 등록 언어를 순서대로 빌드 검사 |
+| `languages` | 등록된 추가 언어만 선언 순서대로 출력. 설정이 없으면 빈 결과로 성공 |
+| `build/open/check --lang ko` | 한국어 문서만 대상으로 수행 |
 
-`check`도 산출물을 생성하며 doctest를 실행하거나 번역의 완전성을 판단하지 않습니다.
-활성화된 Rust 항목의 매크로가 참조하는 파일을 검사합니다. 비활성 `cfg` 항목이나
-선택되지 않은 Cargo feature의 문서는 검사 대상이 아닙니다.
+언어 설정이 없는 프로젝트도 기본 문서를 생성·검사할 수 있습니다. 설정을 작성했다면
+잘못된 코드·중복·빈 목록은 오류입니다. `--lang`은 등록된 언어만 허용하며
+`languages`에는 사용할 수 없습니다. 기본 문서의 언어를 영어 등으로 추정하지 않습니다.
+
+`check`도 산출물을 생성하며 첫 실패에서 멈춥니다. doctest, 번역 완전성 또는 브라우저
+JavaScript의 렌더링 성공을 검사하지 않습니다. 활성 Rust 항목이 참조하는 문서를
+검사하므로 비활성 `cfg`와 선택하지 않은 feature의 문서는 검사 대상이 아닙니다.
 
 공통 옵션은 `--manifest-path PATH`, `--package NAME` (`-p NAME`), `--offline`,
-`--locked`, `--help`입니다. 옵션 값은 `--lang ko`처럼 공백으로 구분합니다.
-가상 워크스페이스에 패키지가 여러 개 있으면 `-p`로 하나를 선택합니다.
-일반 패키지 디렉터리에서는 해당 패키지를 자동 선택합니다.
+`--locked`, `--help`입니다. 이름과 값은 공백으로 구분합니다. 가상 워크스페이스에
+여러 패키지가 있으면 `-p`로 하나를 선택합니다. 브라우저는 Cargo의 `BROWSER` 또는
+`doc.browser` 설정을 따릅니다. `--help`는 설정 로딩 없이 의도와 동작 범위를 설명합니다.
 
-브라우저는 Cargo의 `BROWSER` 또는 `doc.browser` 설정을 따릅니다.
-브라우저 실행 실패 처리도 Cargo의 동작을 따릅니다.
+이전 명령은 별칭으로 실행하지 않습니다. 호출 스크립트도 함께 바꾸세요.
+
+| 이전 | 현재 |
+| --- | --- |
+| `cargo textus i18n build --lang ko` | `cargo textus build --lang ko` |
+| `cargo textus render open --lang ko` | `cargo textus open --lang ko` |
+| `cargo textus i18n check` | `cargo textus check` — 이제 기본 문서도 검사 |
+| `cargo textus i18n list` | `cargo textus languages` |
+| `cargo textus build --open` | `cargo textus open` |
 
 ## 언어와 산출물
 
 - 언어 코드는 실제 배정된 소문자 ISO 639-1 코드만 허용합니다. 예: `ko`, `en`, `ja`.
 - `zz`, `kor`, `ko-KR`, `KO`는 거부합니다. 유효해도 설정에 없는 언어는 별도 오류입니다.
-- `languages`는 비어 있거나 중복될 수 없습니다. 각 패키지에 명시적으로 등록합니다.
+- 언어 설정은 선택 사항입니다. 작성한 `languages` 목록은 비어 있거나 중복될 수 없습니다.
 - 설정은 지원 의사 표시입니다. 모든 매크로 호출에 해당 언어 파일을 작성해야 합니다.
-- 기본 문서는 Cargo의 기본 `target/doc`에, 언어별 문서는
-  `target/textus/ko/<패키지명>/doc`처럼 패키지·언어별로 분리합니다. 실제 기준 디렉터리는 `cargo metadata`의
+- textus의 기본 문서는 `target/textus/<패키지명>/default/doc`에, 언어별 문서는
+  `target/textus/<패키지명>/ko/doc`에 분리합니다. 일반 `cargo doc`의 `target/doc`은 유지합니다. 실제 기준 디렉터리는 `cargo metadata`의
   `target_directory`이므로 사용자 지정 target 디렉터리도 반영합니다.
 - Cargo에 빌드 타깃이 설정되어 있으면 타깃 triple 등의 하위 디렉터리가 추가될 수 있습니다.
 
@@ -203,9 +217,9 @@ cargo textus i18n open --lang ko
 
 1. CLI가 `cargo metadata --format-version 1 --no-deps`로 패키지와 설정을 읽습니다.
 2. 선택한 언어를 검증하고, 자식 Cargo 프로세스에만 `TEXTUS_LANG=ko`를 전달합니다.
-3. 전용 target 디렉터리에서 `cargo clean --doc` 후 `cargo doc --no-deps`를 실행합니다.
+3. 전용 target 디렉터리에서 `cargo clean --doc` 후 공통 헤더를 지정한 `cargo rustdoc --lib`를 실행합니다.
 4. 매크로가 파일명 접미사 또는 명시한 언어별 디렉토리로 경로를 선택하고 기본 `include_str!`로 확장됩니다.
-5. rustdoc이 사용자가 작성한 설명과 Rust API 정보를 합쳐 HTML을 생성합니다.
+5. rustdoc이 HTML을 생성하면 공통 자산을 배치합니다. 브라우저에서 Mermaid·KaTeX·알림을 처리합니다.
 
 언어는 매크로 **크레이트 컴파일 시점**의 `option_env!("TEXTUS_LANG")`로 읽습니다.
 Cargo가 환경변수 변경을 추적하므로 같은 target 디렉터리에서 언어를 바꾸거나
@@ -213,12 +227,12 @@ Cargo가 환경변수 변경을 추적하므로 같은 target 디렉터리에서
 생성된 `include_str!`가 rustc에 전달합니다. 다만 Cargo의 rustdoc 캐시가 삭제된
 문서 파일을 놓치는 사례를 통합 테스트에서 확인했으므로, CLI는 실행마다 해당
 패키지·언어의 **생성된 문서만** 비우고 다시 생성합니다. Rust 의존성 빌드 캐시와
-기본 문서, 다른 패키지·언어의 산출물은 유지합니다. 확장 시점의 추적되지 않는 환경변수 읽기나
+일반 Cargo 문서와 다른 패키지·언어의 산출물은 유지합니다. 확장 시점의 추적되지 않는 환경변수 읽기나
 nightly 전용 API에 의존하지 않습니다.
 
 `TEXTUS_LANG`는 내부 전달 규약입니다. 직접 설정하면 일반 Cargo 빌드에도 영향을
 주므로 기본 문서로 돌아갈 때는 해제해야 합니다. CLI는 부모 프로세스 환경이나
-사용자 소스를 수정하지 않습니다.
+사용자 소스를 수정하지 않습니다. 언어 미지정 CLI 실행은 자식의 `TEXTUS_LANG`을 제거합니다.
 
 첫 버전은 한 번에 한 패키지, Cargo의 기본 feature 선택을 지원합니다.
 별도 HTML 문서 열기, 자동 번역, 언어별 rustdoc UI 번역, 임의의 Cargo 옵션 전달,
@@ -243,7 +257,7 @@ python3 -m unittest discover -s scripts/tests
 통합 테스트는 실제 Cargo/rustdoc을 실행하므로 Rust 도구 체인과 의존성 캐시가
 필요합니다. 내부 Cargo 명령은 `--offline`으로 실행합니다. 한국어 생성, 일반
 `include_str!` 보존, 언어 전환, 파일 수정 및 누락, CLI와 패키지 선택을 확인합니다.
-Unix에서는 테스트용 브라우저로 `open`과 `build --open`의 전달 경로도 검사합니다.
+Unix에서는 테스트용 브라우저로 `open`의 전달 경로와 자산 배치 순서를 검사합니다.
 매크로 전용 테스트는 `--no-default-features`에서도 실행됩니다. 절차적 매크로
 라이브러리는 일반 공개 함수·타입 API를 내보내지 않으며 공통 로직은 `textus-core`에 둡니다.
 
