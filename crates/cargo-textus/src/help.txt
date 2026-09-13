@@ -1,40 +1,74 @@
-cargo-textus: localized documentation and whole-page rustdoc rendering
+cargo-textus — 작성한 Rust 문서를 선택하고, 풍부하게 표시하고, 확인합니다.
 
-Usage: cargo textus i18n <COMMAND> [OPTIONS]
-       cargo-textus i18n <COMMAND> [OPTIONS]
+사용법:
+  cargo textus <COMMAND> [OPTIONS]
+  cargo-textus <COMMAND> [OPTIONS]
 
-Commands:
-  open  --lang CODE           Build documentation and open it in a browser
-  build --lang CODE [--open]  Build documentation, optionally opening it
-  list                       List languages registered in package metadata
-  check [--lang CODE]         Run rustdoc for one or all registered languages
+무엇을 할지만 명령으로 선택하세요. 언어는 --lang으로 고르고, Mermaid·수식·알림은
+프로젝트의 렌더링 설정을 따릅니다. 언어 선택과 렌더링을 조합하는 별도 명령은 없습니다.
+자동 번역은 하지 않습니다. 사용자가 작성한 문서를 기존 textus 매크로가 선택합니다.
 
-Options:
-  --manifest-path PATH  Path to Cargo.toml
-  --package, -p NAME    Select one workspace package
-  --offline            Run Cargo without network access
-  --locked             Require the existing Cargo.lock to remain unchanged
-  --help, -h           Show this help
+명령:
+  build                  기본 문서를 렌더링 설정과 함께 생성합니다.
+  open                   문서를 생성하고 자산 배치 후 브라우저로 엽니다.
+  check                  기본 문서와 등록된 모든 언어를 rustdoc으로 빌드 검사합니다.
+  languages              등록된 추가 언어 코드를 선언 순서대로 한 줄씩 출력합니다.
+                         언어 설정이 없으면 아무 코드도 출력하지 않고 성공합니다.
 
-Examples:
-  cargo textus i18n open --lang ko
-  cargo textus i18n build --lang ko --open
-  cargo textus i18n check
+언어 선택:
+  --lang CODE            build/open/check의 대상을 한 언어로 제한합니다.
+                         예: ko, en, ja (실제 배정된 소문자 ISO 639-1 코드).
+                         미지정 시 build/open은 기본 문서를 사용하고,
+                         check는 기본 문서부터 모든 등록 언어를 검사합니다.
+                         languages에는 이 옵션을 사용할 수 없습니다.
 
-Language codes must be assigned lowercase ISO 639-1 codes, such as ko or en.
-Configuration: [package.metadata.textus.i18n] languages = ["en", "ko"]
+공통 옵션:
+  --manifest-path PATH   대상 Cargo.toml 경로. 생략하면 현재 위치에서 찾습니다.
+  --package, -p NAME     워크스페이스의 한 패키지를 선택합니다.
+  --offline             Cargo의 네트워크 접근을 금지합니다.
+  --locked              기존 Cargo.lock을 변경하지 않습니다.
+  --help, -h            프로젝트를 읽거나 빌드하지 않고 이 도움말을 표시합니다.
 
+옵션 이름과 값은 공백으로 구분합니다. 가상 워크스페이스에 패키지가 여러 개면
+-p로 대상을 지정하세요. 현재는 한 패키지의 라이브러리 타깃 전체 API 페이지를 생성합니다.
 
-Whole-page rendering:
-  cargo textus render build [--lang CODE] [--open]
-  cargo textus render open [--lang CODE]
+예시:
+  cargo textus open                     기본 문서 열기
+  cargo textus open --lang ko           한국어 문서를 모든 렌더링 설정과 함께 열기
+  cargo textus build -p my-library      특정 패키지의 기본 문서 생성
+  cargo textus check                    기본 문서와 모든 등록 언어 검사
+  cargo textus check --lang ko          한국어 문서만 검사
+  cargo textus languages                등록된 언어 확인
 
-The same manifest, package, offline and locked options are supported.
-Renders all API pages of one library target using bundled Mermaid Tiny and KaTeX.
-No macros or i18n metadata are needed unless --lang is specified.
-Optional configuration: [package.metadata.textus.render]
+설정의 역할 (Cargo.toml):
+  [package.metadata.textus.i18n]
+  languages = ["en", "ko"]
+
+  [package.metadata.textus.render]
   mermaid = true
   math = true
   alerts = true
   css = ["docs/custom.css"]
   js = ["docs/custom.js"]
+
+두 설정은 선택 사항입니다. 언어를 등록하지 않아도 기본 문서는 생성·검사할 수 있습니다.
+--lang은 등록한 언어만 허용하며 파일이나 매핑이 없으면 오류를 냅니다. 기본 문서를
+영어라고 가정하거나 다른 언어로 조용히 대체하지 않습니다. languages 설정을 작성한
+경우에는 비어 있거나 중복되거나 유효하지 않은 코드가 포함되어서는 안 됩니다.
+
+렌더링 설정을 생략하면 Mermaid·수식·GitHub 형식 알림을 모두 활성화합니다.
+각 기능은 false로 끌 수 있습니다. css/js는 생략 가능하며 패키지 기준 파일 경로입니다.
+렌더러와 폰트는 함께 배포해 오프라인에서도 표시합니다. 사용자 자산은 페이지 전체에
+적용되며, JavaScript는 문서 준비와 내장 렌더링 처리 후 지정 순서대로 실행됩니다.
+
+검사와 산출물:
+  check도 실제 문서를 생성하며 첫 오류에서 멈춥니다. doctest·번역 완전성 검사나
+  브라우저의 JavaScript 렌더링 검사는 아닙니다. 화면 확인은 open으로 수행하세요.
+  산출물은 Cargo target 아래 textus/<패키지>/<default 또는 언어>/doc에 분리합니다.
+  빌드 타깃 설정에 따라 doc 앞에 triple 경로가 추가될 수 있습니다.
+  원본은 수정하지 않으며 일반 cargo doc의 target/doc도 덮어쓰지 않습니다.
+  브라우저 선택은 Cargo의 BROWSER/doc.browser 설정을 따릅니다.
+
+이전 명령에서 이동:
+  i18n/render 명령 계층은 제거했습니다. build/open/check를 바로 사용하세요.
+  list는 languages로, build --open은 open으로 바꾸세요. 이전 명령은 별칭으로 실행하지 않습니다.

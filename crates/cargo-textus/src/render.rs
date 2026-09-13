@@ -1,16 +1,12 @@
 //! rustdoc의 전체 API 페이지에 공통 브라우저 자산을 주입하는 기능 계층.
 //! 원문은 rustdoc에 전달하고 다이어그램과 수식 해석은 브라우저 라이브러리에 위임한다.
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::Command};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    cargo,
-    cli::{Action, Options},
-    config,
-};
+use crate::{cargo, cli::Options, config::Project};
 
 #[path = "render_assets.rs"]
 mod assets;
@@ -45,13 +41,15 @@ impl Default for RenderConfig {
     }
 }
 
-/// 대상 라이브러리의 전체 API 페이지를 공통 헤더와 함께 생성한다.
-/// 언어를 지정할 때만 i18n 설정을 검증하며 일반 render는 언어 등록을 요구하지 않는다.
-pub fn run(options: Options) -> Result<()> {
-    let project = config::load_package(&options)?;
-    if let Some(language) = &options.language {
-        project.i18n_config()?.require_language(language)?;
-    }
+/// 한 문서 변형을 공통 렌더링 설정과 함께 생성한다.
+/// 실행 계층이 패키지와 언어를 검증한 뒤 호출한다. 모든 작업이 같은 생성 경로를 사용하며
+/// `open`이 참이면 자산 배치 완료 후에만 브라우저를 연다.
+pub fn build(
+    project: &Project,
+    options: &Options,
+    language: Option<&str>,
+    open: bool,
+) -> Result<()> {
     let mut config: RenderConfig = project
         .metadata
         .pointer("/textus/render")
@@ -61,9 +59,9 @@ pub fn run(options: Options) -> Result<()> {
         .unwrap_or_default();
     let target = project
         .target_directory
-        .join("textus/render")
+        .join("textus")
         .join(&project.name)
-        .join(options.language.as_deref().unwrap_or("default"));
+        .join(language.unwrap_or("default"));
     let staging = target.join("textus-assets");
     fs::create_dir_all(&staging).context("could not prepare rendering assets")?;
     for (name, bytes) in assets::FILES {
@@ -93,7 +91,7 @@ pub fn run(options: Options) -> Result<()> {
     )?;
 
     // 삭제된 포함 파일과 설정 변경도 재검사하도록 전용 문서 산출물만 정리한다.
-    let status = cargo::command(&options)
+    let status = cargo::command(options)
         .args(["clean", "--doc", "--manifest-path"])
         .arg(&project.manifest_path)
         .arg("--target-dir")
@@ -102,21 +100,7 @@ pub fn run(options: Options) -> Result<()> {
     if !status.success() {
         bail!("could not clean rendering documentation ({status})");
     }
-    let mut command = cargo::command(&options);
-    command
-        .args(["rustdoc", "--lib", "--manifest-path"])
-        .arg(&project.manifest_path)
-        .arg("--package")
-        .arg(&project.name)
-        .arg("--target-dir")
-        .arg(&target);
-    if let Some(language) = &options.language {
-        command.env("TEXTUS_LANG", language);
-    } else {
-        command.env_remove("TEXTUS_LANG");
-    }
-    // 기존 Cargo rustdoc 플래그는 보존하고 추가 인자로 헤더만 전달한다.
-    command.arg("--").arg("--html-in-header").arg(&header);
+    let mut command = rustdoc_command(project, options, language, &target, &header, false);
     let status = command
         .status()
         .context("could not run rendering rustdoc")?;
@@ -126,30 +110,47 @@ pub fn run(options: Options) -> Result<()> {
     if install_assets(&target, &staging, 0)? == 0 {
         bail!("could not locate rustdoc output for rendering assets");
     }
-    if options.open || options.action == Action::Open {
+    if open {
         // 자산 배치 후 같은 빌드를 --open으로 호출해 브라우저 선택은 Cargo에 맡긴다.
-        let mut open = cargo::command(&options);
-        open.args(["rustdoc", "--lib", "--open", "--manifest-path"])
-            .arg(&project.manifest_path)
-            .arg("--package")
-            .arg(&project.name)
-            .arg("--target-dir")
-            .arg(&target);
-        if let Some(language) = &options.language {
-            open.env("TEXTUS_LANG", language);
-        } else {
-            open.env_remove("TEXTUS_LANG");
-        }
-        let status = open
-            .arg("--")
-            .arg("--html-in-header")
-            .arg(&header)
-            .status()?;
+        let status = rustdoc_command(project, options, language, &target, &header, true)
+            .status()
+            .context("could not run cargo rustdoc --open")?;
         if !status.success() {
             bail!("could not open rendering documentation ({status})");
         }
     }
     Ok(())
+}
+
+/// 생성과 열기에서 같은 Cargo 인자·언어·헤더를 사용하도록 명령 구성을 한곳에 둔다.
+/// 기존 rustdoc 환경 플래그를 보존하며 언어 미선택 시 부모의 TEXTUS_LANG은 자식에서 제거한다.
+/// `open`은 Cargo에만 전달하는 실행 옵션이며 textus CLI의 별도 플래그가 아니다.
+fn rustdoc_command(
+    project: &Project,
+    options: &Options,
+    language: Option<&str>,
+    target: &Path,
+    header: &Path,
+    open: bool,
+) -> Command {
+    let mut command = cargo::command(options);
+    command
+        .args(["rustdoc", "--lib", "--manifest-path"])
+        .arg(&project.manifest_path)
+        .arg("--package")
+        .arg(&project.name)
+        .arg("--target-dir")
+        .arg(target);
+    if let Some(language) = language {
+        command.env("TEXTUS_LANG", language);
+    } else {
+        command.env_remove("TEXTUS_LANG");
+    }
+    if open {
+        command.arg("--open");
+    }
+    command.arg("--").arg("--html-in-header").arg(header);
+    command
 }
 
 /// 사용자 자산을 고정 이름으로 복사해 원본 경로가 HTML이나 JavaScript에 섞이지 않게 한다.

@@ -1,23 +1,21 @@
-//! i18n과 전체 문서 render의 CLI 인자를 검증하고 실행 계층에 전달할 요청으로 변환한다.
+//! 작업 중심 CLI 인자를 검증하고 실행 계층에 전달할 요청으로 변환한다.
 //! 파일과 Cargo 프로세스에 접근하지 않아 구문 오류를 실행 전에 판별할 수 있다.
 
 use std::{ffi::OsString, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-/// CLI 기능이 수행할 작업을 구분한다. render는 빌드와 열기만 허용한다.
-///
-/// 브라우저 실행 여부와 대상 언어는 `Options`에 따로 보관해
-/// `build --open`과 `open`이 같은 빌드 경로를 사용하게 한다.
+/// 사용자가 문서에 수행할 작업. 언어와 렌더링 기능의 조합을 별도 명령으로 나누지 않는다.
+/// `Open`만 생성 후 브라우저를 열고 나머지 작업은 브라우저 실행 없이 끝난다.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
-    /// 선택한 언어의 API 문서를 빌드한 뒤 Cargo를 통해 브라우저로 연다.
+    /// 기본 또는 선택 언어 문서를 생성하고 자산 배치 후 브라우저로 연다.
     Open,
-    /// 선택한 언어의 API 문서를 생성한다. 브라우저 실행은 별도 옵션으로 결정한다.
+    /// 기본 또는 선택 언어 문서를 패키지의 렌더링 설정과 함께 생성한다.
     Build,
-    /// 설정에 등록된 언어를 출력한다. 문서 파일의 존재 여부는 검사하지 않는다.
-    List,
-    /// 지정한 언어 또는 모든 등록 언어로 rustdoc을 실행해 문서 포함을 검사한다.
+    /// 등록된 추가 언어만 출력한다. 기본 문서는 특정 언어 코드에 대응시키지 않는다.
+    Languages,
+    /// 언어 미지정 시 기본 문서와 모든 등록 언어를, 지정 시 해당 언어만 빌드 검사한다.
     Check,
 }
 
@@ -29,10 +27,8 @@ pub enum Action {
 pub struct Options {
     /// 실행할 작업. 옵션 조합의 허용 여부를 판단하는 기준이기도 하다.
     pub action: Action,
-    /// 요청한 ISO 639-1 코드. `check`에서 없으면 모든 등록 언어를 검사한다.
+    /// 요청한 ISO 639-1 코드. 없으면 build/open은 기본 문서를, check는 전체 문서를 대상으로 한다.
     pub language: Option<String>,
-    /// `build --open` 요청 여부. `open` 작업 자체의 브라우저 실행과는 별도로 기록한다.
-    pub open: bool,
     /// Cargo에 전달할 매니페스트 경로. 운영체제 경로를 보존하려고 UTF-8 문자열로 제한하지 않는다.
     pub manifest_path: Option<PathBuf>,
     /// 워크스페이스에서 선택할 패키지 이름. 생략하면 매니페스트 위치와 구성원 수로 결정한다.
@@ -52,20 +48,15 @@ pub enum Invocation {
     Help,
     /// 검증된 옵션으로 기능 실행 계층에 처리를 위임한다.
     Run(Options),
-    /// 전체 문서 렌더링을 설정한 rustdoc 빌드. i18n 지원 선언 없이 실행할 수 있다.
-    Render(Options),
 }
 
-/// 실행 파일 이름을 제외한 `[textus] <i18n|render> <작업> [옵션]`을 해석한다.
+/// 실행 파일 이름을 제외한 `[textus] <작업> [옵션]`을 해석한다.
 ///
-/// Cargo가 추가하는 `textus` 접두사를 허용해 Cargo 외부 명령과 바이너리 직접 실행을
-/// 같이 지원한다. 인자가 없거나 어느 위치에든 `--help` 또는 `-h`가 있으면 도움말을 반환한다.
-///
-/// i18n의 `build`와 `open`에는 `--lang`이 필요하고, `list`에는 허용하지 않는다.
-/// render는 `build`와 `open`만 지원하며 `--lang`은 선택적 i18n 조합에 사용한다.
-/// `--open`은 `build` 전용이다. 값을 받는 옵션의 중복, 값 누락, 알 수 없는 인자,
-/// 유효하지 않은 언어 코드는 오류로 반환한다. 값은 옵션과 공백으로 구분해야 한다.
-/// 프로젝트의 언어 등록 여부나 파일 존재 여부는 이 단계에서 확인하지 않는다.
+/// Cargo가 추가하는 `textus` 접두사를 허용하여 직접 실행과 같은 문법을 사용한다.
+/// 인자가 없거나 도움말 플래그가 있으면 프로젝트를 읽지 않고 전체 도움말을 반환한다.
+/// 언어는 build/open/check에서 선택 사항이고 languages에는 허용하지 않는다.
+/// 구문과 코드 유효성을 여기서 검사하며 프로젝트의 언어 등록 여부는 실행 계층에서 확인한다.
+/// 이전 i18n/render 계층과 --open은 실행하지 않고 새 명령으로의 변경 방법을 안내한다.
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
     let mut args = args.into_iter().peekable();
     // Cargo 외부 명령 호출에서는 첫 인자로 하위 명령 이름이 전달된다.
@@ -79,27 +70,20 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
     }
 
     let mut args = args.into_iter();
-    let render = match args.next().as_deref().and_then(|arg| arg.to_str()) {
-        Some("i18n") => false,
-        Some("render") => true,
-        _ => bail!("expected the i18n or render subcommand; see --help"),
-    };
-
     let action = match args.next().as_deref().and_then(|arg| arg.to_str()) {
         Some("open") => Action::Open,
         Some("build") => Action::Build,
-        Some("list") => Action::List,
+        Some("languages") => Action::Languages,
         Some("check") => Action::Check,
-        _ if render => bail!("expected build or open after render; see --help"),
-        _ => bail!("expected open, build, list, or check after i18n; see --help"),
+        Some("i18n" | "render") => bail!(
+            "i18n/render commands were removed; use cargo textus build, open, check, or languages; see --help"
+        ),
+        Some("list") => bail!("list was replaced by cargo textus languages; see --help"),
+        _ => bail!("expected build, open, check, or languages; see --help"),
     };
-    if render && !matches!(action, Action::Build | Action::Open) {
-        bail!("render supports build and open only");
-    }
     let mut options = Options {
         action,
         language: None,
-        open: false,
         manifest_path: None,
         package: None,
         offline: false,
@@ -134,35 +118,21 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
                     bail!("--package may only be specified once");
                 }
             }
-            Some("--open") => options.open = true,
+            Some("--open") => bail!("--open was removed; use cargo textus open instead"),
             Some("--offline") => options.offline = true,
             Some("--locked") => options.locked = true,
             _ => bail!("unknown argument {arg:?}; see --help"),
         }
     }
-    // 프로젝트를 읽기 전에 작업과 옵션의 잘못된 조합을 거부한다.
-    if options.open && options.action != Action::Build {
-        bail!("--open is only valid with build; open already opens documentation");
-    }
-    if options.action == Action::List && options.language.is_some() {
-        bail!("i18n list does not accept --lang");
-    }
-    if !render
-        && matches!(options.action, Action::Build | Action::Open)
-        && options.language.is_none()
-    {
-        bail!("--lang is required for i18n build and i18n open");
+    if options.action == Action::Languages && options.language.is_some() {
+        bail!("languages does not accept --lang; it lists registered languages");
     }
 
     if let Some(language) = &options.language {
         textus_core::i18n::validate_language(language).map_err(anyhow::Error::msg)?;
     }
 
-    Ok(if render {
-        Invocation::Render(options)
-    } else {
-        Invocation::Run(options)
-    })
+    Ok(Invocation::Run(options))
 }
 
 /// 다음 인자를 UTF-8 옵션 값으로 소비하며 누락과 인코딩 오류에 플래그 이름을 붙인다.
@@ -185,52 +155,73 @@ mod tests {
     }
 
     #[test]
-    fn render_works_without_language_and_rejects_i18n_only_actions() {
-        for command in [
-            "render build",
-            "textus render open",
-            "render build --open --lang ko",
-        ] {
+    fn accepts_task_commands_with_optional_language() {
+        for prefix in ["", "textus "] {
+            for (command, expected) in [
+                ("build", Action::Build),
+                ("open", Action::Open),
+                ("check", Action::Check),
+            ] {
+                let Invocation::Run(options) = parse_words(&format!(
+                    "{prefix}{command} --lang ko -p demo --offline --locked"
+                ))
+                .unwrap() else {
+                    panic!("expected command");
+                };
+                assert_eq!(options.action, expected);
+                assert_eq!(options.language.as_deref(), Some("ko"));
+                assert_eq!(options.package.as_deref(), Some("demo"));
+                assert!(options.offline && options.locked);
+                let Invocation::Run(options) = parse_words(&format!("{prefix}{command}")).unwrap()
+                else {
+                    panic!("expected command");
+                };
+                assert!(options.language.is_none());
+            }
             assert!(matches!(
-                parse_words(command).unwrap(),
-                Invocation::Render(_)
+                parse_words(&format!("{prefix}languages")).unwrap(),
+                Invocation::Run(Options {
+                    action: Action::Languages,
+                    ..
+                })
             ));
         }
-        for command in ["render list", "render check", "render build --lang zz"] {
-            assert!(parse_words(command).is_err());
-        }
     }
 
     #[test]
-    fn accepts_cargo_and_direct_invocations() {
-        for prefix in ["", "textus "] {
-            let Invocation::Run(options) =
-                parse_words(&format!("{prefix}i18n build --lang ko --open -p demo")).unwrap()
-            else {
-                panic!("expected a command");
-            };
-            assert_eq!(options.action, Action::Build);
-            assert_eq!(options.language.as_deref(), Some("ko"));
-            assert!(options.open);
-            assert_eq!(options.package.as_deref(), Some("demo"));
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_commands_and_options() {
+    fn rejects_removed_commands_and_invalid_options() {
         for words in [
-            "doc open",
-            "i18n",
-            "i18n open",
-            "i18n build --lang zz",
-            "i18n build --lang ko-KR",
-            "i18n build --lang",
-            "i18n list --lang ko",
-            "i18n check --open",
-            "i18n check --unknown",
-            "i18n check --lang ko --lang en",
+            "i18n open --lang ko",
+            "render build",
+            "list",
+            "build --open",
+            "open --open",
+            "build --lang zz",
+            "build --lang ko-KR",
+            "build --lang",
+            "languages --lang ko",
+            "check --unknown",
+            "check --lang ko --lang en",
+            "build -p a -p b",
+            "build --manifest-path a --manifest-path b",
+            "build --manifest-path",
+            "build -p",
+            "doc",
         ] {
             assert!(parse_words(words).is_err(), "{words}");
+        }
+        assert!(
+            parse_words("build --open")
+                .unwrap_err()
+                .to_string()
+                .contains("cargo textus open")
+        );
+    }
+
+    #[test]
+    fn help_does_not_require_a_project_or_valid_command() {
+        for words in ["", "textus", "--help", "build -h", "i18n --help"] {
+            assert!(matches!(parse_words(words).unwrap(), Invocation::Help));
         }
     }
 }

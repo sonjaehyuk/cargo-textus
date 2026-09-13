@@ -6,7 +6,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 
 (async () => {
-    const root = path.resolve(process.argv[2] || 'target/textus/render/textus-render-demo/default/doc');
+    const root = path.resolve(process.argv[2] || 'target/textus/textus-render-demo/default/doc');
     const server = http.createServer((req, res) => {
         const file = path.join(root, decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
         const types = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2'};
