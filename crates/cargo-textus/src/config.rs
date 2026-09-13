@@ -1,4 +1,4 @@
-//! Cargo metadata에서 대상 패키지를 선택하고 i18n 지원 언어 선언을 검증한다.
+//! Cargo metadata에서 공통 대상 패키지를 선택하고 필요할 때 i18n 지원 선언을 검증한다.
 //! Cargo가 해석한 경로와 워크스페이스 정보를 사용해 TOML 해석을 중복 구현하지 않는다.
 
 use std::{collections::BTreeSet, path::PathBuf};
@@ -30,7 +30,7 @@ struct Package {
     name: String,
     /// 대상 패키지의 매니페스트 위치. 현재 디렉토리와 무관하게 후속 명령을 실행하는 기준이다.
     manifest_path: PathBuf,
-    /// 다른 도구의 설정도 포함하는 원본 값. `/textus/i18n` 부분만 별도로 검증한다.
+    /// 다른 도구의 설정도 포함하는 원본 값. 언어와 렌더링 설정은 사용하는 계층에서 검증한다.
     metadata: serde_json::Value,
 }
 
@@ -43,20 +43,6 @@ struct Package {
 pub struct I18nConfig {
     /// 중복 없는 ISO 639-1 코드 목록. 선언 순서를 유지해 목록 출력과 전체 검사에 사용한다.
     pub languages: Vec<String>,
-}
-
-/// 설정 로딩과 패키지 선택을 마친 실행 대상.
-///
-/// 빌드 단계가 Cargo metadata를 다시 해석하지 않도록 확정된 경로와 설정을 함께 전달한다.
-pub struct Project {
-    /// 선택된 패키지 이름. Cargo의 패키지 선택과 산출물 격리에 함께 사용한다.
-    pub name: String,
-    /// 선택된 패키지의 매니페스트. 원래 CLI에 지정한 워크스페이스 매니페스트와 다를 수 있다.
-    pub manifest_path: PathBuf,
-    /// Cargo가 결정한 공통 산출물 경로. 아래에 textus의 언어별·패키지별 경로를 만든다.
-    pub target_directory: PathBuf,
-    /// 지원 언어의 형식·중복·빈 목록 검증을 통과한 설정.
-    pub config: I18nConfig,
 }
 
 impl I18nConfig {
@@ -93,10 +79,10 @@ impl I18nConfig {
     }
 }
 
-/// Cargo metadata를 실행해 대상 패키지와 검증된 i18n 설정을 반환한다.
+/// Cargo metadata를 실행해 대상 패키지와 기능별 설정의 원본을 반환한다.
 ///
 /// CLI의 오프라인·잠금 파일 옵션을 조회에도 적용한다. 워크스페이스 구성원만 선택
-/// 대상에 두며 설정 누락, 잘못된 스키마, 언어 목록 오류를 빌드 전에 보고한다.
+/// 대상에 둔다. 기능별 설정 검증은 호출 계층에서 수행한다.
 /// Cargo 실행 실패와 응답 해석 실패에는 처리 단계의 맥락을 붙인다.
 pub fn load(options: &Options) -> Result<Project> {
     let mut command = cargo::command(options);
@@ -120,19 +106,39 @@ pub fn load(options: &Options) -> Result<Project> {
         .filter(|package| metadata.workspace_members.contains(&package.id))
         .collect();
     let package = select_package(&members, options)?;
-    let value = package
-        .metadata
-        .pointer("/textus/i18n")
-        .context("missing [package.metadata.textus.i18n]; set languages = [\"en\", \"ko\"]")?;
-    let config: I18nConfig = serde_json::from_value(value.clone())
-        .context("invalid [package.metadata.textus.i18n] configuration")?;
-    config.validate()?;
     Ok(Project {
         name: package.name.clone(),
         manifest_path: package.manifest_path.clone(),
         target_directory: metadata.target_directory,
-        config,
+        metadata: package.metadata.clone(),
     })
+}
+
+/// 언어 설정이 필요 없는 기능도 사용할 수 있는 패키지 선택 결과.
+/// Cargo metadata를 한 번 해석한 뒤 기능별 설정만 별도로 읽는다.
+pub struct Project {
+    /// Cargo에 전달할 패키지 이름. 산출물도 이 이름으로 격리한다.
+    pub name: String,
+    /// 선택 패키지의 매니페스트. 자산 상대 경로의 기준이다.
+    pub manifest_path: PathBuf,
+    /// 사용자 Cargo 설정이 반영된 공통 산출물 경로.
+    pub target_directory: PathBuf,
+    /// 기능별 설정을 추출할 원본 metadata. 다른 도구의 설정은 해석하지 않는다.
+    pub metadata: serde_json::Value,
+}
+
+impl Project {
+    /// 선택적인 지원 언어 선언을 검증한다. 미설정은 기본 문서만 제공하는 정상 상태다.
+    /// 선언이 있으면 빈 목록·중복·잘못된 코드를 거부하여 설정 오류와 미설정을 구분한다.
+    pub fn i18n_config(&self) -> Result<Option<I18nConfig>> {
+        let Some(value) = self.metadata.pointer("/textus/i18n") else {
+            return Ok(None);
+        };
+        let config: I18nConfig = serde_json::from_value(value.clone())
+            .context("invalid [package.metadata.textus.i18n] configuration")?;
+        config.validate()?;
+        Ok(Some(config))
+    }
 }
 
 /// 명시한 패키지 이름을 우선하고, 생략 시 매니페스트 위치로 대상을 결정한다.

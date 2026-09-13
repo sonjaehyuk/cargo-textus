@@ -1,0 +1,43 @@
+/* rustdoc의 본문 색을 보존하고 제목과 테두리로 알림 종류를 구분한다. */
+.docblock blockquote.textus-alert {
+    border-left: .25rem solid var(--textus-alert-color);
+    padding: .5rem 1rem;
+    margin: 1rem 0;
+    color: inherit;
+    background: transparent;
+}
+.docblock .textus-alert > .textus-alert-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 0 .5rem;
+    font-weight: 600;
+    color: var(--textus-alert-color);
+}
+.docblock .textus-alert-title svg {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.docblock .textus-alert > :last-child { margin-bottom: 0; }
+.textus-alert-note { --textus-alert-color: #0969da; }
+.textus-alert-tip { --textus-alert-color: #1a7f37; }
+.textus-alert-important { --textus-alert-color: #8250df; }
+.textus-alert-warning { --textus-alert-color: #9a6700; }
+.textus-alert-caution { --textus-alert-color: #cf222e; }
+/* rustdoc의 테마 선택을 따르며 테마 전환에는 DOM 재변환이 필요하지 않다. */
+html[data-theme="dark"] .textus-alert-note,
+html[data-theme="ayu"] .textus-alert-note { --textus-alert-color: #58a6ff; }
+html[data-theme="dark"] .textus-alert-tip,
+html[data-theme="ayu"] .textus-alert-tip { --textus-alert-color: #3fb950; }
+html[data-theme="dark"] .textus-alert-important,
+html[data-theme="ayu"] .textus-alert-important { --textus-alert-color: #bc8cff; }
+html[data-theme="dark"] .textus-alert-warning,
+html[data-theme="ayu"] .textus-alert-warning { --textus-alert-color: #d29922; }
+html[data-theme="dark"] .textus-alert-caution,
+html[data-theme="ayu"] .textus-alert-caution { --textus-alert-color: #f85149; }

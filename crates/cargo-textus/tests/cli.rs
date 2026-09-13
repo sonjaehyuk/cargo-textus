@@ -71,10 +71,7 @@ pub struct Nested {
     fn cli(&self, arguments: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-textus"));
         self.prepare(&mut command);
-        command
-            .args(["textus", "i18n"])
-            .args(arguments)
-            .arg("--offline");
+        command.arg("textus").args(arguments).arg("--offline");
         command
     }
 
@@ -93,8 +90,8 @@ pub struct Nested {
             Some(language) => self
                 .root
                 .join("target/textus")
-                .join(language)
-                .join("fixture"),
+                .join("fixture")
+                .join(language),
             None => self.root.join("target"),
         };
         fs::read_to_string(target.join("doc/fixture").join(page)).unwrap()
@@ -142,7 +139,7 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     let original_source = fs::read(fixture.root.join("src/lib.rs")).unwrap();
     let original_manifest = fs::read(fixture.root.join("Cargo.toml")).unwrap();
 
-    let list = success(fixture.cli(&["list"]).output().unwrap());
+    let list = success(fixture.cli(&["languages"]).output().unwrap());
     assert_eq!(String::from_utf8(list.stdout).unwrap(), "en\nko\n");
     failure(
         fixture.cli(&["build", "--lang", "zz"]).output().unwrap(),
@@ -159,7 +156,18 @@ fn localized_rustdoc_and_incremental_rebuilds() {
             .html(None, "index.html")
             .contains("Default guide marker")
     );
-    success(fixture.cli(&["check"]).output().unwrap());
+    let checked = success(fixture.cli(&["check"]).output().unwrap());
+    assert!(
+        String::from_utf8_lossy(&checked.stdout).contains("Checked 3 documentation variant(s)")
+    );
+    let default_html = fs::read_to_string(
+        fixture
+            .root
+            .join("target/textus/fixture/default/doc/fixture/index.html"),
+    )
+    .unwrap();
+    assert!(default_html.contains("Default guide marker"));
+    assert!(default_html.contains("data-textus-render"));
     assert!(
         fixture
             .html(Some("en"), "index.html")
@@ -248,10 +256,7 @@ fn check_browser(fixture: &Fixture) {
     )
     .unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
-    for args in [
-        &["open", "--lang", "ko"][..],
-        &["build", "--lang", "ko", "--open"][..],
-    ] {
+    for args in [&["open", "--lang", "ko"][..]] {
         let mut command = fixture.cli(args);
         // Pass the executable path directly, including spaces.
         command
@@ -271,7 +276,7 @@ fn check_browser(fixture: &Fixture) {
             )
         });
         assert!(
-            opened.contains("/textus/ko/fixture/doc/fixture/index.html"),
+            opened.contains("/textus/fixture/ko/doc/fixture/index.html"),
             "{opened}"
         );
         fs::remove_file(&log).unwrap();
@@ -287,17 +292,14 @@ fn selects_workspace_packages_explicitly() {
     let command = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_cargo-textus"))
             .current_dir(&root)
-            .args(["i18n", "list", "--offline"])
+            .args(["languages", "--offline"])
             .args(args)
             .output()
             .unwrap()
     };
     failure(command(&[]), "select one workspace package");
     failure(command(&["-p", "does-not-exist"]), "not found");
-    failure(
-        command(&["-p", "cargo-textus"]),
-        "missing [package.metadata.textus.i18n]",
-    );
+    assert!(success(command(&["-p", "cargo-textus"])).stdout.is_empty());
     let result = success(command(&["-p", "textus-demo"]));
     assert_eq!(String::from_utf8(result.stdout).unwrap(), "en\nko\n");
     let result = success(command(&["--manifest-path", "examples/demo/Cargo.toml"]));
@@ -338,5 +340,183 @@ fn directory_documents_rebuild_and_report_missing_mappings_and_files() {
     failure(
         fixture.cli(&["check", "--lang", "ko"]).output().unwrap(),
         "docs/ko/guide.md",
+    );
+}
+
+#[test]
+fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.root.join("extra assets")).unwrap();
+    fs::write(
+        fixture.root.join("extra assets/style.css"),
+        ".docblock { color: red; }",
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("extra assets/custom.js"),
+        "window.customLoaded = true;",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    let manifest = manifest
+        + "\n[package.metadata.textus.render]\ncss = [\"extra assets/style.css\"]\njs = [\"extra assets/custom.js\"]\n";
+    fs::write(fixture.root.join("Cargo.toml"), manifest).unwrap();
+    let extra = fixture.root.join("extra assets/header.html");
+    fs::write(&extra, "<meta name=existing-header content=preserved>").unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-textus"));
+    fixture.prepare(&mut command);
+    command.args(["build", "--lang", "ko", "--offline"]).env(
+        "CARGO_ENCODED_RUSTDOCFLAGS",
+        format!("--html-in-header\x1f{}", extra.display()),
+    );
+    success(command.output().unwrap());
+    let doc = fixture.root.join("target/textus/fixture/ko/doc");
+    for page in ["index.html", "fn.greet.html", "nested/struct.Nested.html"] {
+        let html = fs::read_to_string(doc.join("fixture").join(page)).unwrap();
+        assert!(html.contains("data-textus-render"));
+        assert!(html.contains("existing-header"));
+        assert!(html.contains("한국어 문서 표식"));
+    }
+    assert!(doc.join("textus-assets/mermaid.js").is_file());
+    assert!(
+        doc.join("textus-assets/fonts/KaTeX_Main-Regular.woff2")
+            .is_file()
+    );
+    assert_eq!(
+        fs::read_to_string(doc.join("textus-assets/custom-0.js")).unwrap(),
+        "window.customLoaded = true;"
+    );
+    fs::remove_file(fixture.root.join("extra assets/custom.js")).unwrap();
+    failure(command.output().unwrap(), "could not read render asset");
+    fs::write(
+        fixture.root.join("extra assets/custom.js"),
+        "window.customLoaded = true;",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        manifest.replace(
+            "[package.metadata.textus.render]",
+            "[package.metadata.textus.render]\nalerts = false",
+        ),
+    )
+    .unwrap();
+    success(command.output().unwrap());
+    let html = fs::read_to_string(doc.join("fixture/index.html")).unwrap();
+    assert!(html.contains("\"alerts\":false"));
+}
+
+#[cfg(unix)]
+#[test]
+fn render_opens_with_assets_ready_and_without_i18n_configuration() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        manifest
+            .split("[package.metadata.textus.i18n]")
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    let script = fixture.root.join("render browser.sh");
+    let log = fixture.root.join("render-browser.log");
+    let asset = fixture
+        .root
+        .join("target/textus/fixture/default/doc/textus-assets/mermaid.js");
+    fs::write(&script, "#!/bin/sh\nif [ -f \"$TEXTUS_TEST_ASSET\" ]; then printf '%s\\n' \"$@\" > \"$TEXTUS_TEST_BROWSER_LOG\"; fi\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+    for args in [&["open"][..]] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-textus"));
+        fixture.prepare(&mut command);
+        command
+            .args(args)
+            .arg("--offline")
+            .env("TEXTUS_LANG", "ko")
+            .env("BROWSER", &script)
+            .env("TEXTUS_TEST_ASSET", &asset)
+            .env("TEXTUS_TEST_BROWSER_LOG", &log);
+        success(command.output().unwrap());
+        for _ in 0..100 {
+            if log.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            fs::read_to_string(&log)
+                .unwrap()
+                .contains("/textus/fixture/default/doc/fixture/index.html")
+        );
+        let html = fs::read_to_string(
+            fixture
+                .root
+                .join("target/textus/fixture/default/doc/fixture/index.html"),
+        )
+        .unwrap();
+        assert!(html.contains("Default guide marker"));
+        fs::remove_file(&log).unwrap();
+    }
+}
+
+#[test]
+fn unified_commands_work_without_language_metadata() {
+    let fixture = Fixture::new();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        manifest
+            .split("[package.metadata.textus.i18n]")
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        success(fixture.cli(&["languages"]).output().unwrap())
+            .stdout
+            .is_empty()
+    );
+    success(
+        fixture
+            .cli(&["build"])
+            .env("TEXTUS_LANG", "ko")
+            .output()
+            .unwrap(),
+    );
+    let html = fs::read_to_string(
+        fixture
+            .root
+            .join("target/textus/fixture/default/doc/fixture/index.html"),
+    )
+    .unwrap();
+    assert!(html.contains("Default guide marker") && html.contains("data-textus-render"));
+    let result = success(fixture.cli(&["check"]).output().unwrap());
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Checked 1 documentation variant(s)"));
+    failure(
+        fixture.cli(&["build", "--lang", "ko"]).output().unwrap(),
+        "no languages registered",
+    );
+}
+
+#[test]
+fn check_includes_default_but_selected_language_does_not() {
+    let fixture = Fixture::new();
+    fs::remove_file(fixture.root.join("docs/guide.md")).unwrap();
+    let result = success(fixture.cli(&["check", "--lang", "ko"]).output().unwrap());
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Checked 1 documentation variant(s)"));
+    assert!(
+        !fixture
+            .root
+            .join("target/textus/fixture/default/doc/fixture/index.html")
+            .exists()
+    );
+    failure(fixture.cli(&["check"]).output().unwrap(), "docs/guide.md");
+    assert!(
+        !fixture
+            .root
+            .join("target/textus/fixture/en/doc/fixture/index.html")
+            .exists()
     );
 }

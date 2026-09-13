@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Cargo CLI and macros for user-authored localized documentation"
+description = "Cargo CLI and macros for Rustacean who are truly serious about writing"
 
 [lib]
 proc-macro = true
@@ -16,8 +16,8 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [[test]]
-name = "i18n"
-path = "tests/i18n.rs"
+name = "cli"
+path = "tests/cli.rs"
 required-features = ["cli"]
 
 [features]

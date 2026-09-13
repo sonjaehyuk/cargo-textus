@@ -1,26 +1,75 @@
-cargo-textus: user-authored localized Rust documentation
+cargo-textus — Documentation framework for Rustaceans who are truly serious about writing.
 
-Usage: cargo textus i18n <COMMAND> [OPTIONS]
-       cargo-textus i18n <COMMAND> [OPTIONS]
+USAGE:
+  cargo textus <COMMAND> [OPTIONS]
+  cargo-textus <COMMAND> [OPTIONS]
 
-Commands:
-  open  --lang CODE           Build documentation and open it in a browser
-  build --lang CODE [--open]  Build documentation, optionally opening it
-  list                       List languages registered in package metadata
-  check [--lang CODE]         Run rustdoc for one or all registered languages
+Only select what to do through commands. Choose the language using --lang, and Mermaid, formulas,
+and notifications will follow the project's rendering settings.
+Existing textus macros will select the documents written by the user.
+Therefore, these commands only serve to determine what to do with those documents.
 
-Options:
-  --manifest-path PATH  Path to Cargo.toml
-  --package, -p NAME    Select one workspace package
-  --offline            Run Cargo without network access
-  --locked             Require the existing Cargo.lock to remain unchanged
-  --help, -h           Show this help
+COMMAND:
+  build                  Create a basic document with rendering settings.
+  open                   Create the document, place the assets, and open it in the browser.
+  check                  Build and check the base documentation and all registered languages using rustdoc.
+  languages              Outputs the registered additional language codes line by line in the order they were declared.
+                         If there is no language setting, it succeeds without outputting any code.
 
-Examples:
-  cargo textus i18n open --lang ko
-  cargo textus i18n build --lang ko --open
-  cargo textus i18n check
+OPTIONS - language selection:
+  --lang CODE            Restrict the targets of build/open/check to a single language.
+                         Example: ko, en, ja (a lowercase ISO 639-1 code).
+                         If unspecified, build/open uses the default document,
+                         and check inspects all registered languages starting from the default document.
+                         This option cannot be used for languages.
 
-Language codes must be assigned lowercase ISO 639-1 codes, such as ko or en.
-Configuration: [package.metadata.textus.i18n] languages = ["en", "ko"]
+OPTIONS - common:
+  --manifest-path PATH   Path to the target Cargo.toml. If omitted, it will be searched for in the current location.
+  --package, -p NAME     Select a package from the workspace.
+  --offline              Prohibit Cargo's network access.
+  --locked               Do not modify the existing Cargo.lock.
+  --help, -h             Display this help without reading or building projects.
+
+Separate option names and values with a space.
+If there are multiple packages in the virtual workspace, specify the target using -p.
+Currently, this generates API pages for all library targets within a single package.
+
+EXAMPLES:
+  cargo textus open                     Open default document
+  cargo textus open --lang ko           Open Korean document with all rendering settings
+  cargo textus build -p my-library      Generate default documentation for a specific package
+  cargo textus check                    Check the base document and all registered languages
+  cargo textus check --lang ko          Check Korean documents only
+  cargo textus languages                Check registered languages
+
+EXAMPLES (Cargo.toml):
+  [package.metadata.textus.i18n]
+  languages = ["ko"]
+
+  [package.metadata.textus.render]
+  mermaid = true
+  math = true
+  alerts = true
+  css = ["docs/custom.css"]
+  js = ["docs/custom.js"]
+
+All (Cargo.toml) settings are optional. You can generate and check the base documentation even without registering a language.
+The --lang option only allows languages registered in Cargo.toml and will throw an error if the file or mapping is missing.
+It does not assume the base documentation is English or silently substitute it with another language.
+Therefore, if you use Korean as your base documentation and English as a secondary language, it works as follows:
+* cargo doc [--OPTIONS] → Generates the Korean documentation as is.
+* cargo textus languages → Shows "English".
+* cargo textus open → Generates the Korean documentation with additional features provided by textus, including Mermaid.
+* cargo textus open --lang en → Generates the English documentation with additional features provided by textus, including Mermaid.
+
+If you have configured the languages setting in Cargo.toml, it must not be empty, contain duplicates, or include invalid codes.
+
+CHECK:
+  The check command also generates actual documents and stops at the first error.
+  It is not a doctest, translation completeness check, or browser JavaScript rendering check.
+  Use the open option to verify the screen.
+  The output is separated into textus/<package>/<default or language>/doc under the Cargo target.
+  Depending on the build target settings, a triple path may be added before doc.
+  The original files are not modified, and the target/doc of a regular cargo doc is not overwritten.
+  Browser selection follows Cargo's BROWSER/doc.browser settings.
 
