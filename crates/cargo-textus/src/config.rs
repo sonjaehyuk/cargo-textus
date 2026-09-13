@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, path::PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::{cargo, cli::Options};
@@ -34,6 +34,43 @@ pub struct Project {
 }
 
 impl I18nConfig {
+    /// Validates the i18n (internationalization) configuration.
+    ///
+    /// This method ensures that the language configuration is valid by performing
+    /// the following checks:
+    ///
+    /// ## Validation Rules
+    ///
+    /// 1. **Non-empty languages**: The languages list must contain at least one language
+    /// 2. **Valid language codes**: Each language must pass `textus_core::i18n::validate_language`
+    /// 3. **No duplicates**: Each language can only appear once in the configuration
+    ///
+    /// ## Returns
+    ///
+    /// * `Ok(())` - If all validation checks pass
+    /// * `Err` - If any validation rule is violated, with a descriptive error message
+    ///
+    /// ## Errors
+    ///
+    /// This function will return an error if:
+    ///
+    /// * The `languages` collection is empty
+    /// * Any language code fails validation according to `textus_core::i18n::validate_language`
+    /// * A duplicate language code is detected in the configuration
+    ///
+    /// ## Examples
+    ///
+    /// ```ignore
+    /// let config = I18nConfig {
+    ///     languages: vec!["en".to_string(), "fr".to_string()],
+    /// };
+    /// config.validate()?; // Ok
+    ///
+    /// let invalid = I18nConfig {
+    ///     languages: vec![],
+    /// };
+    /// invalid.validate()?; // Error: languages must not be empty
+    /// ```
     fn validate(&self) -> Result<()> {
         if self.languages.is_empty() {
             bail!("textus i18n languages must not be empty");
@@ -48,6 +85,31 @@ impl I18nConfig {
         Ok(())
     }
 
+    /// Verifies that a language is registered in the available languages list.
+    ///
+    /// ## Arguments
+    ///
+    /// * `language` - The language identifier to check for registration
+    ///
+    /// ## Returns
+    ///
+    /// * `Ok(())` - If the language is found in the registered languages
+    /// * `Err` - If the language is not registered, with an error message listing all available languages
+    ///
+    /// ## Errors
+    ///
+    /// Returns an error if the specified language is not found in `self.languages`,
+    /// including a message that shows the requested language and all available options.
+    ///
+    /// ## Examples
+    ///
+    /// ```ignore
+    /// // Assuming "ko" is registered
+    /// manager.require_language("ko")?; // Ok(())
+    ///
+    /// // Assuming "unknown" is not registered
+    /// manager.require_language("unknown")?; // Err: language "unknown" is not registered
+    /// ```
     pub fn require_language(&self, language: &str) -> Result<()> {
         if !self.languages.iter().any(|entry| entry == language) {
             bail!(

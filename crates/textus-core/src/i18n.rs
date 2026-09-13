@@ -66,9 +66,11 @@ mod tests {
         let codes: Vec<_> = LANGUAGE_CODES.split_whitespace().collect();
         assert!(codes.len() > 180);
         assert!(codes.windows(2).all(|pair| pair[0] < pair[1]));
-        assert!(codes
-            .iter()
-            .all(|code| code.len() == 2 && code.bytes().all(|byte| byte.is_ascii_lowercase())));
+        assert!(
+            codes
+                .iter()
+                .all(|code| code.len() == 2 && code.bytes().all(|byte| byte.is_ascii_lowercase()))
+        );
     }
 
     #[test]

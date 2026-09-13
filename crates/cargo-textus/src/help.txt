@@ -1,0 +1,26 @@
+cargo-textus: user-authored localized Rust documentation
+
+Usage: cargo textus i18n <COMMAND> [OPTIONS]
+       cargo-textus i18n <COMMAND> [OPTIONS]
+
+Commands:
+  open  --lang CODE           Build documentation and open it in a browser
+  build --lang CODE [--open]  Build documentation, optionally opening it
+  list                       List languages registered in package metadata
+  check [--lang CODE]         Run rustdoc for one or all registered languages
+
+Options:
+  --manifest-path PATH  Path to Cargo.toml
+  --package, -p NAME    Select one workspace package
+  --offline            Run Cargo without network access
+  --locked             Require the existing Cargo.lock to remain unchanged
+  --help, -h           Show this help
+
+Examples:
+  cargo textus i18n open --lang ko
+  cargo textus i18n build --lang ko --open
+  cargo textus i18n check
+
+Language codes must be assigned lowercase ISO 639-1 codes, such as ko or en.
+Configuration: [package.metadata.textus.i18n] languages = ["en", "ko"]
+

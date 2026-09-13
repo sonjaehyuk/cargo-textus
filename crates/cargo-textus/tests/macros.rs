@@ -1,6 +1,6 @@
 //! This target also runs with --no-default-features, without CLI dependencies.
 
-#[doc = cargo_textus::include_doc!("tests/fixtures/guide.md")]
+#[doc = cargo_textus::include_str!("tests/fixtures/guide.md")]
 struct Documented;
 
 #[test]
@@ -13,7 +13,7 @@ fn macro_is_usable_as_an_attribute_and_string_expression() {
         Some(language) => panic!("no test fixture for language {language}"),
     };
     assert_eq!(
-        cargo_textus::include_doc!("tests/fixtures/guide.md"),
+        cargo_textus::include_str!("tests/fixtures/guide.md"),
         expected
     );
 }

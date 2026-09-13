@@ -34,8 +34,8 @@ impl Fixture {
         .unwrap();
         fs::write(
             root.join("src/lib.rs"),
-            r##"#![doc = cargo_textus::include_doc!("docs/guide.md")]
-#[doc = cargo_textus::include_doc!(r#"docs/guide.md"#)]
+            r##"#![doc = cargo_textus::include_str!("docs/guide.md")]
+#[doc = cargo_textus::include_str!(r#"docs/guide.md"#)]
 pub fn greet() {}
 /// Ordinary documentation is preserved.
 #[doc = include_str!("../docs/builtin.md")]
@@ -46,9 +46,9 @@ pub mod nested;
         .unwrap();
         fs::write(
             root.join("src/nested.rs"),
-            r#"#[doc = cargo_textus::include_doc!("docs/guide.md")]
+            r#"#[doc = cargo_textus::include_str!("docs/guide.md")]
 pub struct Nested {
-    #[doc = cargo_textus::include_doc!("docs/guide.md")]
+    #[doc = cargo_textus::include_str!("docs/guide.md")]
     pub field: u8,
 }
 "#,
@@ -154,13 +154,17 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     );
 
     success(fixture.cargo_doc(None));
-    assert!(fixture
-        .html(None, "index.html")
-        .contains("Default guide marker"));
+    assert!(
+        fixture
+            .html(None, "index.html")
+            .contains("Default guide marker")
+    );
     success(fixture.cli(&["check"]).output().unwrap());
-    assert!(fixture
-        .html(Some("en"), "index.html")
-        .contains("English guide marker"));
+    assert!(
+        fixture
+            .html(Some("en"), "index.html")
+            .contains("English guide marker")
+    );
     for page in ["index.html", "fn.greet.html", "nested/struct.Nested.html"] {
         assert!(
             fixture.html(Some("ko"), page).contains("한국어 문서 표식"),
@@ -170,9 +174,11 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     let ordinary = fixture.html(Some("ko"), "struct.Ordinary.html");
     assert!(ordinary.contains("Built-in marker"));
     assert!(ordinary.contains("Ordinary documentation is preserved."));
-    assert!(fixture
-        .html(None, "index.html")
-        .contains("Default guide marker"));
+    assert!(
+        fixture
+            .html(None, "index.html")
+            .contains("Default guide marker")
+    );
 
     // Force language changes within the SAME target directory. This catches
     // untracked proc-macro environment reads hidden by per-language targets.
@@ -192,12 +198,16 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     )
     .unwrap();
     success(fixture.cli(&["build", "--lang", "ko"]).output().unwrap());
-    assert!(fixture
-        .html(Some("ko"), "index.html")
-        .contains("수정된 한국어 문서 표식"));
-    assert!(fixture
-        .html(Some("en"), "index.html")
-        .contains("English guide marker"));
+    assert!(
+        fixture
+            .html(Some("ko"), "index.html")
+            .contains("수정된 한국어 문서 표식")
+    );
+    assert!(
+        fixture
+            .html(Some("en"), "index.html")
+            .contains("English guide marker")
+    );
 
     #[cfg(unix)]
     check_browser(&fixture);
@@ -221,7 +231,7 @@ fn localized_rustdoc_and_incremental_rebuilds() {
     // Malformed macro input is a useful compiler diagnostic, not a panic.
     fs::write(
         fixture.root.join("src/lib.rs"),
-        "#[doc = cargo_textus::include_doc!(123)]\npub struct Invalid;\n",
+        "#[doc = cargo_textus::include_str!(123)]\npub struct Invalid;\n",
     )
     .unwrap();
     failure(fixture.cargo_doc(None), "expected string literal");
