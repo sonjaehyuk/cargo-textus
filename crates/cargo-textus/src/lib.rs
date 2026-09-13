@@ -66,7 +66,6 @@ mod directory;
 ///     "docs/guide.md", ko = "docs/ko", en = "translations/english",
 /// )]
 /// pub fn example() {}
-
 /// ```
 ///
 /// 언어 미선택 시 기본 파일을 사용한다. 선택하지 않은 매핑도 코드·중복·경로를
