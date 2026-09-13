@@ -5,6 +5,7 @@ mod cargo;
 mod cli;
 mod config;
 mod i18n;
+mod render;
 
 /// 운영체제 인자를 파서에 전달하고 요청 결과를 프로세스 종료 상태로 변환한다.
 ///
@@ -17,6 +18,7 @@ fn main() -> std::process::ExitCode {
             Ok(())
         }
         cli::Invocation::Run(options) => i18n::run(options),
+        cli::Invocation::Render(options) => render::run(options),
     }) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {

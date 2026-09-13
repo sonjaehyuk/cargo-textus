@@ -340,3 +340,106 @@ fn directory_documents_rebuild_and_report_missing_mappings_and_files() {
         "docs/ko/guide.md",
     );
 }
+
+#[test]
+fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.root.join("extra assets")).unwrap();
+    fs::write(
+        fixture.root.join("extra assets/style.css"),
+        ".docblock { color: red; }",
+    )
+    .unwrap();
+    fs::write(
+        fixture.root.join("extra assets/custom.js"),
+        "window.customLoaded = true;",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    let manifest = manifest
+        + "\n[package.metadata.textus.render]\ncss = [\"extra assets/style.css\"]\njs = [\"extra assets/custom.js\"]\n";
+    fs::write(fixture.root.join("Cargo.toml"), manifest).unwrap();
+    let extra = fixture.root.join("extra assets/header.html");
+    fs::write(&extra, "<meta name=existing-header content=preserved>").unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-textus"));
+    fixture.prepare(&mut command);
+    command
+        .args(["render", "build", "--lang", "ko", "--offline"])
+        .env(
+            "CARGO_ENCODED_RUSTDOCFLAGS",
+            format!("--html-in-header\x1f{}", extra.display()),
+        );
+    success(command.output().unwrap());
+    let doc = fixture.root.join("target/textus/render/fixture/ko/doc");
+    for page in ["index.html", "fn.greet.html", "nested/struct.Nested.html"] {
+        let html = fs::read_to_string(doc.join("fixture").join(page)).unwrap();
+        assert!(html.contains("data-textus-render"));
+        assert!(html.contains("existing-header"));
+        assert!(html.contains("한국어 문서 표식"));
+    }
+    assert!(doc.join("textus-assets/mermaid.js").is_file());
+    assert!(
+        doc.join("textus-assets/fonts/KaTeX_Main-Regular.woff2")
+            .is_file()
+    );
+    assert_eq!(
+        fs::read_to_string(doc.join("textus-assets/custom-0.js")).unwrap(),
+        "window.customLoaded = true;"
+    );
+    fs::remove_file(fixture.root.join("extra assets/custom.js")).unwrap();
+    failure(command.output().unwrap(), "could not read render asset");
+}
+
+#[cfg(unix)]
+#[test]
+fn render_opens_with_assets_ready_and_without_i18n_configuration() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let manifest = fs::read_to_string(fixture.root.join("Cargo.toml")).unwrap();
+    fs::write(
+        fixture.root.join("Cargo.toml"),
+        manifest
+            .split("[package.metadata.textus.i18n]")
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    let script = fixture.root.join("render browser.sh");
+    let log = fixture.root.join("render-browser.log");
+    let asset = fixture
+        .root
+        .join("target/textus/render/fixture/default/doc/textus-assets/mermaid.js");
+    fs::write(&script, "#!/bin/sh\nif [ -f \"$TEXTUS_TEST_ASSET\" ]; then printf '%s\\n' \"$@\" > \"$TEXTUS_TEST_BROWSER_LOG\"; fi\n").unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+    for args in [&["render", "open"][..], &["render", "build", "--open"][..]] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-textus"));
+        fixture.prepare(&mut command);
+        command
+            .args(args)
+            .arg("--offline")
+            .env("TEXTUS_LANG", "ko")
+            .env("BROWSER", &script)
+            .env("TEXTUS_TEST_ASSET", &asset)
+            .env("TEXTUS_TEST_BROWSER_LOG", &log);
+        success(command.output().unwrap());
+        for _ in 0..100 {
+            if log.exists() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            fs::read_to_string(&log)
+                .unwrap()
+                .contains("/render/fixture/default/doc/fixture/index.html")
+        );
+        let html = fs::read_to_string(
+            fixture
+                .root
+                .join("target/textus/render/fixture/default/doc/fixture/index.html"),
+        )
+        .unwrap();
+        assert!(html.contains("Default guide marker"));
+        fs::remove_file(&log).unwrap();
+    }
+}

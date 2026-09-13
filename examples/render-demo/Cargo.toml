@@ -1,0 +1,11 @@
+[package]
+name = "textus-render-demo"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata.textus.render]
+mermaid = true
+math = true
+css = ["docs/custom.css"]
+js = ["docs/custom.js"]

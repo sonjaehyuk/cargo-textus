@@ -1,4 +1,4 @@
-cargo-textus: user-authored localized Rust documentation
+cargo-textus: localized documentation and whole-page rustdoc rendering
 
 Usage: cargo textus i18n <COMMAND> [OPTIONS]
        cargo-textus i18n <COMMAND> [OPTIONS]
@@ -24,3 +24,16 @@ Examples:
 Language codes must be assigned lowercase ISO 639-1 codes, such as ko or en.
 Configuration: [package.metadata.textus.i18n] languages = ["en", "ko"]
 
+
+Whole-page rendering:
+  cargo textus render build [--lang CODE] [--open]
+  cargo textus render open [--lang CODE]
+
+The same manifest, package, offline and locked options are supported.
+Renders all API pages of one library target using bundled Mermaid Tiny and KaTeX.
+No macros or i18n metadata are needed unless --lang is specified.
+Optional configuration: [package.metadata.textus.render]
+  mermaid = true
+  math = true
+  css = ["docs/custom.css"]
+  js = ["docs/custom.js"]
