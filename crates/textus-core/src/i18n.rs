@@ -1,12 +1,26 @@
-//! ISO 639-1 validation and localized document filenames.
+//! 언어 식별자와 문서 경로를 검증하는 순수 함수 모음.
+//!
+//! 파일명 접미사 방식과 명시적 디렉토리 방식이 같은 언어 표를 사용한다.
+//! 경로 검증은 문자열 규칙 검사이며 파일 존재 여부나 심볼릭 링크 대상은 검사하지 않는다.
 
-/// Assigned ISO 639-1 codes, stored as a sorted, whitespace-separated table.
-/// Source: iso-codes `iso_639-2.json` (alpha_2 fields), maintained from the
-/// Library of Congress ISO 639-2 registration authority's alpha-2 mappings.
+/// 실제 배정된 ISO 639-1 코드를 공백으로 구분해 정렬한 검증용 표.
+///
+/// `iso-codes`의 `iso_639-2.json`에서 `alpha_2` 필드를 추출한 데이터를 포함한다.
+/// 형식만 맞는 미배정 코드를 허용하지 않기 위해 외부 조회 없이 이 표와 비교한다.
+/// 출처는 미국 의회도서관 ISO 639-2 등록 기관의 두 글자 코드 대응표다.
 /// <https://www.loc.gov/standards/iso639-2/php/code_list.php>
+/// 갱신 시 데이터의 출처와 변경 내용을 함께 검토해야 한다.
 const LANGUAGE_CODES: &str = include_str!("iso-639-1.txt");
 
-/// Accept only assigned, lowercase ISO 639-1 codes (not regional tags).
+/// 입력이 실제 배정된 소문자 ISO 639-1 코드인지 검사한다.
+///
+/// `ko`와 `en`은 허용하지만 `KO`, `kor`, `ko-KR`, 미배정 코드 `zz`는 거부한다.
+/// 대소문자 변환이나 지역 태그 축약을 하지 않아 사용자 입력의 의미를 조용히 바꾸지 않는다.
+/// 프로젝트의 지원 언어 등록 여부는 별도 검사이며 여기서는 언어 표의 유효성만 판단한다.
+///
+/// # 오류
+///
+/// 표에 없는 값이면 잘못된 코드와 허용 형식의 예시를 포함한 메시지를 반환한다.
 pub fn validate_language(language: &str) -> Result<(), String> {
     if LANGUAGE_CODES
         .split_whitespace()
@@ -20,8 +34,17 @@ pub fn validate_language(language: &str) -> Result<(), String> {
     }
 }
 
-/// Select `guide.ko.md` for `guide.md` and `ko`, or preserve the default path.
-/// Paths are portable, package-relative paths using `/` separators.
+/// 기본 파일의 마지막 확장자 앞에 언어 코드를 삽입한 경로를 반환한다.
+///
+/// `docs/api.guide.md`와 `Some("ko")`는 `docs/api.guide.ko.md`가 된다.
+/// `None`이면 검증한 기본 경로를 그대로 반환한다. 파일을 읽지 않으므로 이 결과만으로
+/// 문서 존재 여부는 알 수 없다. 호출자는 패키지 매니페스트 위치를 기준으로 해석한다.
+///
+/// # 오류
+///
+/// 빈 경로, 절대 경로, 역슬래시·콜론, 빈 경로 구간, `..`, 파일명 또는 확장자 누락을
+/// 거부한다. 언어가 주어지면 코드도 검증한다. 유효한 파일이 있는 다른 언어를 탐색하거나
+/// 자동 대체하는 정책은 포함하지 않는다.
 pub fn document_path(path: &str, language: Option<&str>) -> Result<String, String> {
     if path.is_empty()
         || path.starts_with('/')
@@ -47,8 +70,23 @@ pub fn document_path(path: &str, language: Option<&str>) -> Result<String, Strin
     }
 }
 
-/// Select the default file, or its basename within an explicitly mapped directory.
-/// All paths are package-relative; mappings are validated even when unselected.
+/// 기본 파일 또는 언어에 명시적으로 연결된 디렉토리의 동일 파일명을 선택한다.
+///
+/// `directories`는 `(언어 코드, 패키지 기준 디렉토리)` 쌍의 목록이다.
+/// `docs/api/guide.md`와 `("ko", "translations/korean/")`을 사용하면 한국어
+/// 선택 결과는 `translations/korean/guide.md`다. 기본 경로의 상위 디렉토리는
+/// 복사하지 않으며 디렉토리 끝의 `/` 하나를 제거한 뒤 파일명 전체를 붙인다.
+///
+/// 언어가 없으면 기본 파일을 선택하지만 모든 매핑의 유효성을 먼저 확인한다.
+/// 이렇게 하면 언어를 전환해야만 설정 오타가 드러나는 일을 줄일 수 있다.
+/// 선택하지 않은 파일의 존재 여부를 포함해 파일 시스템은 검사하지 않는다.
+///
+/// # 오류
+///
+/// 기본 경로는 [`document_path`]와 같은 규칙을 따른다. 빈 매핑 목록, 미배정 코드,
+/// 중복 키, 빈 디렉토리, 절대 경로, 역슬래시·콜론, 빈 구간과 `..`를 거부한다.
+/// 요청 언어의 유효성과 매핑 존재 여부는 별개로 검사하며, 유효하지만 매핑이 없는
+/// 언어에는 등록 누락 오류를 반환한다. 기본 파일이나 다른 언어로 대체하지 않는다.
 pub fn directory_document_path(
     path: &str,
     directories: &[(&str, &str)],
@@ -66,7 +104,7 @@ pub fn directory_document_path(
         {
             return Err(format!("duplicate language directory mapping for {code:?}"));
         }
-        // A single trailing slash is accepted for directory notation.
+        // 디렉토리임을 표현하는 마지막 슬래시 하나만 허용하고 중복 슬래시는 거부한다.
         let directory = directory.strip_suffix('/').unwrap_or(directory);
         if directory.is_empty()
             || directory.starts_with('/')

@@ -1,95 +1,71 @@
+//! CLI 인자를 검증하고 실행 계층에 전달할 요청으로 변환한다.
+//! 파일과 Cargo 프로세스에 접근하지 않아 구문 오류를 실행 전에 판별할 수 있다.
+
 use std::{ffi::OsString, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+/// i18n 명령이 수행할 작업을 구분한다.
+///
+/// 브라우저 실행 여부와 대상 언어는 `Options`에 따로 보관해
+/// `build --open`과 `open`이 같은 빌드 경로를 사용하게 한다.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
+    /// 선택한 언어의 API 문서를 빌드한 뒤 Cargo를 통해 브라우저로 연다.
     Open,
+    /// 선택한 언어의 API 문서를 생성한다. 브라우저 실행은 별도 옵션으로 결정한다.
     Build,
+    /// 설정에 등록된 언어를 출력한다. 문서 파일의 존재 여부는 검사하지 않는다.
     List,
+    /// 지정한 언어 또는 모든 등록 언어로 rustdoc을 실행해 문서 포함을 검사한다.
     Check,
 }
 
+/// 구문 검증을 마친 CLI 요청과 Cargo 공통 옵션을 보관한다.
+///
+/// 언어 코드의 유효성은 파싱 중 확인하지만 프로젝트 등록 여부는 설정 로딩 뒤 확인한다.
+/// 이 구분으로 잘못된 코드와 아직 지원하지 않는 언어를 서로 다른 오류로 안내한다.
 #[derive(Debug)]
 pub struct Options {
+    /// 실행할 작업. 옵션 조합의 허용 여부를 판단하는 기준이기도 하다.
     pub action: Action,
+    /// 요청한 ISO 639-1 코드. `check`에서 없으면 모든 등록 언어를 검사한다.
     pub language: Option<String>,
+    /// `build --open` 요청 여부. `open` 작업 자체의 브라우저 실행과는 별도로 기록한다.
     pub open: bool,
+    /// Cargo에 전달할 매니페스트 경로. 운영체제 경로를 보존하려고 UTF-8 문자열로 제한하지 않는다.
     pub manifest_path: Option<PathBuf>,
+    /// 워크스페이스에서 선택할 패키지 이름. 생략하면 매니페스트 위치와 구성원 수로 결정한다.
     pub package: Option<String>,
+    /// 네트워크 없이 실행하도록 metadata 조회와 빌드 등 모든 자식 Cargo 명령에 전달한다.
     pub offline: bool,
+    /// 잠금 파일 변경을 금지하도록 모든 자식 Cargo 명령에 전달한다.
     pub locked: bool,
 }
 
+/// 인자 처리가 끝난 뒤 진입점이 수행할 동작.
+///
+/// 도움말을 일반 실행과 분리하여 프로젝트 설정이 없어도 사용법을 볼 수 있게 한다.
 #[derive(Debug)]
 pub enum Invocation {
+    /// 인자가 없거나 도움말 플래그가 있으면 설정 로딩 없이 사용법을 출력한다.
     Help,
+    /// 검증된 옵션으로 기능 실행 계층에 처리를 위임한다.
     Run(Options),
 }
 
-/// Parses command-line arguments into an `Invocation` for the textus i18n tool.
+/// 실행 파일 이름을 제외한 `[textus] i18n <작업> [옵션]` 인자를 해석한다.
 ///
-/// This function processes command-line arguments for a Cargo subcommand that handles
-/// internationalization (i18n) operations. It expects arguments in the format:
-/// `[textus] i18n <action> [options]`
+/// Cargo가 추가하는 `textus` 접두사를 허용해 Cargo 외부 명령과 바이너리 직접 실행을
+/// 같이 지원한다. 인자가 없거나 어느 위치에든 `--help` 또는 `-h`가 있으면 도움말을 반환한다.
 ///
-/// ## Arguments
-///
-/// * `args` - An iterator of `OsString` values representing command-line arguments.
-///   When invoked as a Cargo subcommand, Cargo passes the subcommand name
-///   ("textus") as the first argument, which is automatically stripped.
-///
-/// ## Supported Actions
-///
-/// * `open` - Opens i18n documentation (**requires** `--lang`)
-/// * `build` - Builds i18n resources (**requires** `--lang`)
-/// * `list` - Lists available languages (**does not accept** `--lang`)
-/// * `check` - Checks i18n configuration
-///
-/// ## Supported Options
-///
-/// * `--lang <LANGUAGE>` - Specifies the target language (required for `open` and `build`). It must be a lowercase valid ISO 639-1 code.
-/// * `--manifest-path <PATH>` - Path to the Cargo.toml file
-/// * `--package`, `-p <PACKAGE>` - Specific package to operate on
-/// * `--open` - Opens documentation after building (only valid with `build` action)
-/// * `--offline` - Run without accessing the network
-/// * `--locked` - Require Cargo.lock to be up to date
-/// * `--help`, `-h` - Display help information
-///
-/// ## Returns
-///
-/// * `Ok(Invocation::Help)` - If help is requested or no arguments are provided
-/// * `Ok(Invocation::Run(options))` - If valid arguments are parsed
-/// * `Err` - If invalid arguments, combinations, or missing required options are detected
-///
-/// ## Errors
-///
-/// This function returns an error if:
-/// * The `i18n` subcommand is not specified
-/// * An unknown action is provided
-/// * An unknown argument is encountered
-/// * Required options are missing (e.g., `--lang` for `build`/`open`)
-/// * Incompatible options are combined (e.g., `--open` with `list`)
-/// * An option is specified multiple times when only one value is allowed
-/// * The language code fails validation
-///
-/// ## Examples
-///
-/// ```no_run
-/// # use std::ffi::OsString;
-/// let args = vec![
-///     OsString::from("textus"),
-///     OsString::from("i18n"),
-///     OsString::from("build"),
-///     OsString::from("--lang"),
-///     OsString::from("es"),
-/// ];
-/// let invocation = parse(args)?;
-/// # Ok::<(), anyhow::Error>(())
-/// ```
+/// `build`와 `open`에는 `--lang`이 필요하고, `list`에는 허용하지 않는다.
+/// `--open`은 `build` 전용이다. 값을 받는 옵션의 중복, 값 누락, 알 수 없는 인자,
+/// 유효하지 않은 언어 코드는 오류로 반환한다. 값은 옵션과 공백으로 구분해야 한다.
+/// 프로젝트의 언어 등록 여부나 파일 존재 여부는 이 단계에서 확인하지 않는다.
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
     let mut args = args.into_iter().peekable();
-    // Cargo passes the external subcommand name as the first argument.
+    // Cargo 외부 명령 호출에서는 첫 인자로 하위 명령 이름이 전달된다.
     if args.peek().is_some_and(|arg| arg == "textus") {
         args.next();
     }
@@ -99,7 +75,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
         return Ok(Invocation::Help);
     }
 
-    // NOTE: Change the if statement below when add new features.
+    // 새 기능이 추가되면 이 지점에서 기능별 인자 처리로 분배한다.
     let mut args = args.into_iter();
     if args.next().as_deref() != Some(std::ffi::OsStr::new("i18n")) {
         bail!("expected the i18n subcommand; see --help");
@@ -128,7 +104,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
                 if options.language.is_none() {
                     options.language = Some(value);
                 } else {
-                    // Already Given.
+                    // 값이 있는 옵션을 조용히 덮어쓰지 않고 중복 입력을 알린다.
                     bail!("--lang may only be specified once");
                 }
             }
@@ -137,7 +113,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
                 if options.manifest_path.is_none() {
                     options.manifest_path = Some(value.into());
                 } else {
-                    // Already Given.
+                    // 값이 있는 옵션을 조용히 덮어쓰지 않고 중복 입력을 알린다.
                     bail!("--manifest-path may only be specified once");
                 }
             }
@@ -146,7 +122,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
                 if options.package.is_none() {
                     options.package = Some(value);
                 } else {
-                    // Already Given.
+                    // 값이 있는 옵션을 조용히 덮어쓰지 않고 중복 입력을 알린다.
                     bail!("--package may only be specified once");
                 }
             }
@@ -156,7 +132,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
             _ => bail!("unknown argument {arg:?}; see --help"),
         }
     }
-    // Check the invalid combines with options and an action.
+    // 프로젝트를 읽기 전에 작업과 옵션의 잘못된 조합을 거부한다.
     if options.open && options.action != Action::Build {
         bail!("--open is only valid with i18n build; i18n open already opens documentation");
     }
@@ -174,33 +150,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation> {
     Ok(Invocation::Run(options))
 }
 
-/// Extracts and validates the next command-line argument as a UTF-8 string.
+/// 다음 인자를 UTF-8 옵션 값으로 소비하며 누락과 인코딩 오류에 플래그 이름을 붙인다.
 ///
-/// ## Arguments
-///
-/// * `args` - A mutable iterator over command-line arguments as `OsString`s
-/// * `flag` - The name of the flag being processed (used for error messages)
-///
-/// ## Returns
-///
-/// * `Ok(String)` - The next argument successfully converted to a UTF-8 string
-/// * `Err` - If no argument is available or if the argument contains invalid UTF-8
-///
-/// ## Errors
-///
-/// This function will return an error if:
-/// * The iterator is exhausted (no value provided after the flag)
-/// * The `OsString` cannot be converted to valid UTF-8
-///
-/// ## Examples
-///
-/// ```no_run
-/// use std::ffi::OsString;
-///
-/// let mut args = vec![OsString::from("value1")].into_iter();
-/// let result = string_value(&mut args, "--output");
-/// assert_eq!(result.unwrap(), "value1");
-/// ```
+/// 언어 코드와 패키지 이름처럼 문자열 비교가 필요한 값에 사용한다.
+/// 파일 경로는 이 함수를 거치지 않고 `OsString`에서 `PathBuf`로 변환한다.
 fn string_value(args: &mut impl Iterator<Item = OsString>, flag: &str) -> Result<String> {
     args.next()
         .with_context(|| format!("{flag} requires a value"))?
