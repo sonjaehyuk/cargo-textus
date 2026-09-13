@@ -21,7 +21,8 @@ If you are not a native English speaker, you will likely find it inconvenient th
 2. [Document Writing](#document-writing)
    1. [Automatic language extension](#automatic-language-extension)
    2. [Directory-based](#directory-based)
-3.
+3. [Development](#development)
+4. [Deployment](#deployment)
 
 
 ## Quickstart
