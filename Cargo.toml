@@ -4,13 +4,13 @@ default-members = ["crates/cargo-textus", "crates/textus-core"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-progress1"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://git.sonjaehyuk.me/SLIB/cargo-textus"
 readme = "README.md"
 
 [workspace.dependencies]
-textus-core = { path = "crates/textus-core", version = "0.1.0" }
+textus-core = { path = "crates/textus-core", version = "0.2.0-progress1" }
 syn = "3"
 quote = "1"

@@ -1,11 +1,19 @@
 # cargo-textus
 
-For Rustaceans who are truly serious about writing.
+**For Rustaceans who are truly serious about writing.**
 
-사용자가 직접 작성한 언어별 문서를 Rust API 문서에 포함하는 Cargo 도구의 초안입니다.
-자동 번역을 수행하지 않습니다. Stable Rust에서 동작하며 Rust 1.95.0으로 검증했습니다.
+## What is this?
 
-## 빠른 시작
+If you are not a native English speaker, you will likely find it inconvenient that much of the Reference material, including docs.rs, is only available in English. This is because most of the Reference is generated through comments (`///`, `//!` in Rust), and providing i18n in such an environment is practically challenging.
+
+**cargo-textus** is a tool for managing localized documentation and some additional documentation rendering features for Rust projects. Specifically, they are as follows:
+* You can set additional languages in Cargo.toml. Then, when you call cargo-textus macros for documentation, you can use CLI commands to build documentation specifically for those additional languages (while the default documentation remains intact, of course).
+* You can render **Mermaid** diagrams in your documentation.
+* You can render **mathematical formulas** in your documentation.
+* You can use the **blockquote highlights** provided like GitHub in your documentation.
+
+
+## Quickstart
 
 저장소 루트에서 CLI를 설치합니다. 아래는 소스 checkout에서 설치하는 방법입니다.
 
