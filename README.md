@@ -142,14 +142,19 @@ textus는 공통 JS/CSS를 주입하고, 구문 해석은 브라우저의 Mermai
 [package.metadata.textus.render]
 mermaid = true
 math = true
+alerts = true
 css = ["docs/custom.css"]
 js = ["docs/custom.js"]
 ```
 
-설정은 선택 사항이며 기본적으로 두 렌더러를 활성화합니다. 사용자 CSS/JS는 패키지
+설정은 선택 사항이며 기본적으로 Mermaid·수식·알림을 활성화합니다. 사용자 CSS/JS는 패키지
 기준 파일이며 전체 페이지에 적용합니다. `--lang`을 지정할 때만 기존 i18n 설정이
 필요합니다. 첫 구현은 한 패키지의 라이브러리 타깃을 지원합니다. Mermaid Tiny의
 일부 다이어그램 종류는 지원하지 않으며 Markdown 처리 중 변형된 TeX는 복원하지 않습니다.
+GitHub 형식의 `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`
+알림도 지원합니다. 인용문의 첫 줄에 마커만 쓰고 다음 줄부터 내용을 작성하세요.
+`alerts = false`로 끌 수 있으며, 일반 인용문과 코드 속 마커는 보존합니다.
+
 [사용법·설계·제한 및 검증 방법](docs/rustdoc-rendering-plan.md)을 확인하세요.
 
 ## CLI

@@ -49,12 +49,13 @@ cargo run -p cargo-textus -- render open -p textus-render-demo
 pub fn example() {}
 ````
 
-기본적으로 두 렌더러가 활성화되며 설정은 선택 사항이다.
+기본적으로 Mermaid·수식·알림이 활성화되며 설정은 선택 사항이다.
 
 ```toml
 [package.metadata.textus.render]
 mermaid = true
 math = true
+alerts = true
 css = ["docs/custom.css"]
 js = ["docs/custom.js"]
 ```
@@ -66,6 +67,46 @@ JS의 상대 import 및 추가 파일은 자동 수집·복사하지 않는다. 
 CSS와 classic JS 파일을 사용한다. CSS는 페이지 전체에 적용되며, JS는 DOM 준비 및
 내장 렌더링 시도 후 지정 순서대로 실행된다. 사용자 JS는 페이지 권한으로 실행된다.
 알 수 없는 설정 키와 잘못된 값 타입은 오류다.
+
+## GitHub 형식 알림
+
+`alerts = true`가 기본값이며 `false`로 설정하면 원래 인용문을 그대로 표시한다.
+CSS/JS를 추가로 작성할 필요 없이 전체 API 페이지의 문서 영역에 적용한다.
+
+```markdown
+> [!NOTE]
+> 참고 정보입니다.
+
+> [!TIP]
+> 작업에 도움이 되는 팁입니다.
+
+> [!IMPORTANT]
+> 꼭 알아야 할 정보입니다.
+
+> [!WARNING]
+> 즉시 주의해야 하는 내용입니다.
+
+> [!CAUTION]
+> 위험이나 부정적인 결과를 안내합니다.
+```
+
+구현은 rustdoc이 생성한 최상위 `blockquote`의 첫 문단을 확인한다. 대문자 마커만
+첫 줄에 독립적으로 있을 때 변환하고 제목(Note·Tip·Important·Warning·Caution),
+자체 SVG 아이콘, 종류별 색상의 테두리를 표시한다. 아이콘은 스크린 리더에서 제외하고
+텍스트 제목으로 종류를 전달한다. 정적 문서이므로 실시간 알림 역할(`role="alert"`)은 붙이지 않는다.
+밝은 테마와 rustdoc의 dark·ayu 테마에 맞춰 색상을 변경하며 사용자 CSS가 재정의할 수 있다.
+
+본문의 링크·강조·목록·코드·추가 문단은 원래 DOM을 유지한다. 코드로 감싼 마커,
+지원하지 않는 종류, 소문자 마커, 같은 줄에 본문을 덧붙인 마커, 중첩 인용문이나 목록
+내부의 알림은 변환하지 않는다. Markdown escape는 rustdoc 단계에서 사라질 수 있으므로
+마커를 문자 그대로 보이려면 인라인 코드로 감싼다. GitHub의 서버 렌더러를 그대로
+가져온 것은 아니며 [GitHub 알림 문법](https://docs.github.com/en/enterprise-cloud%40latest/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts)을
+브라우저 DOM에서 처리하는 방식이다. JS를 끄면 원래 마커와 인용문이 보인다.
+
+처리 순서는 알림 DOM 변환 → Mermaid·KaTeX → 사용자 JS이다. 알림 안의 그림과
+수식에도 기존 렌더러가 적용된다. CSS는 사용자 CSS보다 먼저 로드한다. 별도의 외부 자산이나
+추가 의존성 없이 작동한다. 브라우저 테스트에서 다섯 종류, 일반 인용문 보존, 중첩 페이지,
+서식 보존, 토글 비활성화와 테마 전환을 검증한다.
 
 ## i18n 조합과 빌드
 
