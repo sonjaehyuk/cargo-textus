@@ -10,7 +10,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "cargo-textus"
-version = "0.2.0-progress1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "quote",
@@ -106,11 +106,11 @@ dependencies = [
 
 [[package]]
 name = "textus-core"
-version = "0.2.0-progress1"
+version = "0.2.0"
 
 [[package]]
 name = "textus-demo"
-version = "0.2.0-progress1"
+version = "0.2.0"
 dependencies = [
  "cargo-textus",
 ]
