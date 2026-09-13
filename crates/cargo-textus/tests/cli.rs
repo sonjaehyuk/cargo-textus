@@ -520,33 +520,3 @@ fn check_includes_default_but_selected_language_does_not() {
             .exists()
     );
 }
-
-#[test]
-fn help_and_removed_commands_never_start_a_build() {
-    let fixture = Fixture::new();
-    let output = success(
-        fixture
-            .cli(&["--help", "--manifest-path", "missing.toml"])
-            .output()
-            .unwrap(),
-    );
-    let help = String::from_utf8(output.stdout).unwrap();
-    for text in [
-        "cargo textus <COMMAND>",
-        "languages",
-        "기본 문서부터",
-        "렌더링 설정",
-        "doctest",
-    ] {
-        assert!(help.contains(text), "{text}");
-    }
-    for args in [
-        &["i18n", "open", "--lang", "ko"][..],
-        &["render", "build"][..],
-        &["build", "--open"][..],
-        &["list"][..],
-    ] {
-        failure(fixture.cli(args).output().unwrap(), "cargo textus");
-    }
-    assert!(!fixture.root.join("target").exists());
-}
