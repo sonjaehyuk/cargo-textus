@@ -73,9 +73,9 @@ my-crate/
     └── guide.ko.md    # cargo textus COMMAND --lang ko
 ```
 
-* `#[doc = cargo_textus::include_str_from_dir!("docs/greet.md", ko = "docs/ko/", ja = "docs/japense",)]`
+* `#[doc = cargo_textus::include_str_from_dir!("docs/greet.md", ko = "docs/ko/", ja = "docs/japanese",)]`
 
-Also, in this case, the `docs/greet.md` file is used as the default documentation. When you just run `cargo textus open --lang ja`, the **`docs/japense/greet.md`** file is used automatically.
+Also, in this case, the `docs/greet.md` file is used as the default documentation. When you just run `cargo textus open --lang ja`, the **`docs/japanese/greet.md`** file is used automatically.
 
 ```text
 my-crate/
@@ -83,7 +83,7 @@ my-crate/
 ├── src/
 └── docs/
     ├── guide.md       # Just normal cargo build / doc / test
-    ├── japense    
+    ├── japanese    
         └── guide.md    # cargo textus COMMAND --lang ja
 ```
 
