@@ -98,7 +98,7 @@ cargo textus --help           # Show the full list and description of commands.
 cargo textus open             # Build and open the default documentation.
 cargo textus open --lang ko   # Build and open the Korean documentation
 cargo textus build --lang ko  # Build the Korean documentation
-cargo textus lanaguages       # See the list of registered languages.
+cargo textus languages       # See the list of registered languages.
 cargo textus check            # Check the base document and all registered languages
 ```
 
