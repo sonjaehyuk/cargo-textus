@@ -15,3 +15,14 @@ pub struct Ordinary;
 pub fn greet_from_directory() -> &'static str {
     "Hello!"
 }
+
+#[doc = cargo_textus::localized_str!(
+    "Returns a greeting, documented without a separate Markdown file.",
+    ko = r#"별도의 Markdown 파일 없이 인사말을 문서화합니다.
+
+일반 문서처럼 **강조**와 `코드`를 쓸 수 있습니다."#,
+    en = "Returns a greeting with inline English documentation.",
+)]
+pub fn greet_with_inline_docs() -> &'static str {
+    "Hello!"
+}

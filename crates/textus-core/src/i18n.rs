@@ -1,6 +1,6 @@
-//! 언어 식별자와 문서 경로를 검증하는 순수 함수 모음.
+//! 언어 식별자와 문서 경로·문자열 선택을 검증하는 순수 함수 모음.
 //!
-//! 파일명 접미사 방식과 명시적 디렉토리 방식이 같은 언어 표를 사용한다.
+//! 파일명 접미사·명시적 디렉토리·직접 작성한 문자열 방식이 같은 언어 표를 사용한다.
 //! 경로 검증은 문자열 규칙 검사이며 파일 존재 여부나 심볼릭 링크 대상은 검사하지 않는다.
 
 /// 실제 배정된 ISO 639-1 코드를 공백으로 구분해 정렬한 검증용 표.
@@ -134,6 +134,43 @@ pub fn directory_document_path(
     ))
 }
 
+/// 기본 문자열 또는 선택 언어에 명시적으로 연결된 문서 문자열을 빌려 반환한다.
+///
+/// `translations`는 `(언어 코드, 문서 내용)` 목록이다. 언어 미선택 시에도 모든
+/// 매핑을 검증한다. 내용은 경로나 Markdown으로 해석하지 않으며 빈 문자열·공백·개행을
+/// 그대로 보존한다. 프로젝트의 지원 언어 metadata와 이 매핑 목록은 서로 독립적이다.
+///
+/// # 오류
+///
+/// 빈 매핑 목록, 잘못된 ISO 639-1 코드와 중복 키는 선택 여부와 무관하게 오류다.
+/// 요청 언어도 검증하며, 유효한 언어라도 대응 문자열이 없으면 기본값으로 대체하지 않는다.
+pub fn localized_document<'a>(
+    default: &'a str,
+    translations: &[(&str, &'a str)],
+    language: Option<&str>,
+) -> Result<&'a str, String> {
+    if translations.is_empty() {
+        return Err("at least one language string mapping is required".into());
+    }
+    for (index, &(code, _)) in translations.iter().enumerate() {
+        validate_language(code)?;
+        if translations[..index]
+            .iter()
+            .any(|&(previous, _)| previous == code)
+        {
+            return Err(format!("duplicate language string mapping for {code:?}"));
+        }
+    }
+    let Some(language) = language else {
+        return Ok(default);
+    };
+    validate_language(language)?;
+    translations
+        .iter()
+        .find_map(|&(code, text)| (code == language).then_some(text))
+        .ok_or_else(|| format!("no document string registered for language {language:?}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,6 +230,62 @@ mod tests {
             assert!(document_path(path, Some("ko")).is_err(), "{path}");
         }
         assert!(document_path("a.md", Some("zz")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod localized_tests {
+    use super::localized_document as select;
+
+    #[test]
+    fn selects_contents_without_path_validation_or_text_transformation() {
+        let mappings = [("ko", "  한국어\n문서 "), ("en", ""), ("as", "অসমীয়া")];
+        let default = "../text: \\ and \"quotes\"\n\n$math$";
+        assert_eq!(select(default, &mappings, None).unwrap(), default);
+        assert_eq!(select("", &mappings, None).unwrap(), "");
+        assert_eq!(
+            select(default, &mappings, Some("ko")).unwrap(),
+            "  한국어\n문서 "
+        );
+        assert_eq!(select(default, &mappings, Some("en")).unwrap(), "");
+        assert_eq!(select(default, &mappings, Some("as")).unwrap(), "অসমীয়া");
+        assert!(
+            select(default, &mappings, Some("ja"))
+                .unwrap_err()
+                .contains("no document string registered")
+        );
+        assert!(
+            select(default, &mappings, Some("zz"))
+                .unwrap_err()
+                .contains("invalid ISO 639-1")
+        );
+    }
+
+    #[test]
+    fn validates_all_keys_even_when_default_or_another_language_is_selected() {
+        assert!(
+            select("default", &[], None)
+                .unwrap_err()
+                .contains("at least one")
+        );
+        for language in [None, Some("ko")] {
+            for code in ["zz", "KO", "kor", "ko-KR"] {
+                assert!(
+                    select("default", &[("ko", "한국어"), (code, "other")], language)
+                        .unwrap_err()
+                        .contains("invalid ISO 639-1")
+                );
+            }
+            assert!(
+                select(
+                    "default",
+                    &[("ko", "한국어"), ("en", "one"), ("en", "two")],
+                    language
+                )
+                .unwrap_err()
+                .contains("duplicate language string mapping")
+            );
+        }
     }
 }
 
