@@ -21,6 +21,7 @@ If you are not a native English speaker, you will likely find it inconvenient th
 2. [Document Writing](#document-writing)
    1. [Automatic language extension](#automatic-language-extension)
    2. [Directory-based](#directory-based)
+   3. [Inline strings](#inline-strings)
 3. [Development](#development)
 4. [Deployment](#deployment)
 
@@ -58,7 +59,7 @@ js = ["docs/custom.js"]
 ```
 
 `textus.render` works on the principle that additional features are injected into rustdoc by the `cargo textus` command. Therefore, render requires no additional configuration. However, to use `textus.i18n`, you must use the macros provided by the cargo-textus crate.
-There are two ways to use the macros:
+There are three ways to supply localized documentation:
 
 * `#[doc = cargo_textus::include_str!("docs/greet.md")]`: 
 
@@ -87,6 +88,12 @@ my-crate/
     ├── japanese    
         └── guide.md    # cargo textus COMMAND --lang ja
 ```
+
+* `#[doc = cargo_textus::localized_str!("Default documentation", ko = "한국어 문서", ja = "日本語の文書")]`
+
+Supply documentation directly as string literals instead of separate files. With no language
+selected, the first string is used; `cargo textus open --lang ko` selects the `ko` string.
+Languages selected through the CLI must also be registered in the metadata above.
 
 Check the [Document Writing](#document-writing) below for more details.
 
@@ -149,6 +156,48 @@ Both the default path and directories are relative to the `Cargo.toml` of the ca
 
 At least one mapping is required, and the keys must be actual assigned lowercase ISO 639-1 codes. Duplicate keys and invalid codes or paths will cause a compilation error even if that language is not selected. If there is no mapping for the selected language or the selected file does not exist, an error is raised and no automatic fallback occurs. If no language is selected, only the default file is included. The existence of files that are not selected is not checked.
 
+### Inline strings
+
+Use `localized_str!` to keep a short description and its translations in Rust source:
+
+```rust
+#[doc = cargo_textus::localized_str!(
+    "Returns a greeting.",
+    ko = r#"인사말을 반환합니다.
+
+여러 줄의 **Markdown**과 `코드`도 쓸 수 있습니다."#,
+    en = "Returns a greeting in English.",
+)]
+pub fn greet() -> &'static str {
+    "Hello!"
+}
+```
+
+The first argument is the default documentation. It is followed by one or more
+`language = "content"` mappings, with an optional trailing comma. Ordinary and raw
+string literals are supported; whitespace, line breaks, escapes, and empty content
+are preserved according to Rust string literal rules. Variables, constants, byte strings,
+and expressions such as `concat!` are not accepted. The macro also works as a
+`&'static str` expression, including in constants.
+
+Keys must be assigned lowercase ISO 639-1 codes. All keys are validated, including
+unselected ones; duplicates and an empty mapping list are compilation errors.
+Rust keyword codes such as Assamese `as` are accepted; `as` and `r#as` refer to the
+same code and cannot both be mapped in one call. If a selected language has no mapping,
+compilation fails without falling back to the default or another language. An empty
+mapped string is valid content and does not trigger fallback.
+
+As with the file macros, no language selection means the default string is used.
+To select `ko` through the CLI, also register `"ko"` in
+`[package.metadata.textus.i18n].languages`. Macro mappings do not register languages
+automatically, and registered languages do not supply missing macro strings.
+`cargo textus check` builds the default documentation and all registered languages.
+
+This macro performs compile-time string selection without reading or writing document
+files. Rustdoc renders the selected Markdown through the same pipeline as file-based
+documentation. `include_str!` and `include_str_from_dir!` remain available with their
+existing behavior, and all three macros work with `default-features = false`.
+
 ### Footnote previews
 
 Write standard rustdoc Markdown footnotes and build with `cargo textus build` or `cargo textus open`:
@@ -186,12 +235,12 @@ cargo clippy -p cargo-textus --all-targets --no-default-features -- -D warnings
 cargo test -p cargo-textus --no-default-features
 python3 -m unittest discover -s scripts/tests
 ```
-Integration tests run actual Cargo/rustdoc, so they require the Rust toolchain and dependency cache. Internal Cargo commands are executed with `--offline`. We verify Korean generation, preservation of standard `include_str!`, language switching, file modifications and omissions, and CLI and package selection. On Unix, we inspect the delivery path of `open` and the asset placement order using a test browser. Macro-only tests are also run with `--no-default-features`. Procedural macro libraries do not export general public function/type APIs; common logic is kept in `textus-core`.
+Integration tests run actual Cargo/rustdoc, so they require the Rust toolchain and dependency cache. Internal Cargo commands are executed with `--offline`. We verify Korean generation, preservation of standard `include_str!`, language switching, file modifications and omissions, inline string selection and mapping errors, and CLI and package selection. On Unix, we inspect the delivery path of `open` and the asset placement order using a test browser. Macro-only tests are also run with `--no-default-features`. Procedural macro libraries do not export general public function/type APIs; common logic is kept in `textus-core`.
 
 | Directory             | Responsibility                                                       |
 |-----------------------|----------------------------------------------------------------------|
-| `crates/cargo-textus` | CLI binary and `cargo_textus::include_str!` procedural macro library |
-| `crates/textus-core`  | Language code validation and document path selection                 |
+| `crates/cargo-textus` | CLI binary and file/string documentation selection macros |
+| `crates/textus-core`  | Language code validation and document path/string selection          |
 | `examples/...`        | Executable example                                                   |
 
 The language table was extracted from the `alpha_2` field of the system `iso-codes`' `iso_639-2.json` (2026-09-12, 183 entries). The source is the [ISO 639 Registration Authority's list of language codes](https://www.loc.gov/standards/iso639-2/php/code_list.php), and both the source and changes are reviewed together when the list is updated.
