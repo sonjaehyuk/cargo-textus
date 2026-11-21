@@ -378,6 +378,7 @@ fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
         assert!(html.contains("한국어 문서 표식"));
     }
     assert!(doc.join("textus-assets/mermaid.js").is_file());
+    assert!(doc.join("textus-assets/footnotes.css").is_file());
     assert!(
         doc.join("textus-assets/fonts/KaTeX_Main-Regular.woff2")
             .is_file()
@@ -398,13 +399,14 @@ fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
         fixture.root.join("Cargo.toml"),
         manifest.replace(
             "[package.metadata.textus.render]",
-            "[package.metadata.textus.render]\nalerts = false",
+            "[package.metadata.textus.render]\nalerts = false\nfootnotes = false",
         ),
     )
     .unwrap();
     success(command.output().unwrap());
     let html = fs::read_to_string(doc.join("fixture/index.html")).unwrap();
     assert!(html.contains("\"alerts\":false"));
+    assert!(html.contains("\"footnotes\":false"));
 }
 
 #[cfg(unix)]

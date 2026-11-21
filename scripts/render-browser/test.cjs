@@ -4,6 +4,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const http = require('node:http');
 const fs = require('node:fs');
+const testFootnotes = require('./footnotes.cjs');
 
 (async () => {
     const root = path.resolve(process.argv[2] || 'target/textus/textus-render-demo/default/doc');
@@ -11,12 +12,22 @@ const fs = require('node:fs');
         const file = path.join(root, decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
         const types = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2'};
         res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');
-        fs.readFile(file, (error, data) => { res.statusCode = error ? 404 : 200; res.end(error ? '' : new URL(req.url, 'http://localhost').searchParams.has('alerts-off') && path.extname(file) === '.html' ? data.toString().replace('"alerts":true', '"alerts":false') : data); });
+        fs.readFile(file, (error, data) => {
+            res.statusCode = error ? 404 : 200;
+            if (!error && path.extname(file) === '.html') {
+                for (const feature of ['alerts', 'footnotes']) {
+                    if (new URL(req.url, 'http://localhost').searchParams.has(`${feature}-off`)) {
+                        data = data.toString().replace(`"${feature}":true`, `"${feature}":false`);
+                    }
+                }
+            }
+            res.end(error ? '' : data);
+        });
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     let browser;
     try {
-        browser = await chromium.launch({headless: true, args: ['--no-sandbox']});
+        browser = await chromium.launch({headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE_PATH, args: ['--no-sandbox']});
         for (const protocol of ['file', 'http']) {
             for (const name of ['index.html', 'fn.example.html', 'nested/struct.Example.html']) {
                 const page = await browser.newPage();
@@ -66,6 +77,7 @@ const fs = require('node:fs');
                     await page.evaluate(() => document.documentElement.dataset.theme = 'ayu');
                     assert.notEqual(await color(), light);
                 }
+                await testFootnotes(page, name);
                 assert.deepEqual(errors, []);
                 assert.deepEqual(external, []);
                 await page.close();
@@ -79,7 +91,29 @@ const fs = require('node:fs');
         assert.ok((await disabled.locator('.docblock').first().textContent()).includes('[!NOTE]'));
         assert.equal(await disabled.locator('link[href$="alerts.css"]').count(), 0);
         await disabled.close();
-        console.log('Whole-page rendering: SVG, math, CSS/JS, alerts (enabled/disabled), themes, nested pages, file/HTTP and no external requests passed.');
+        const footnotesDisabled = await browser.newPage();
+        await footnotesDisabled.goto(`http://127.0.0.1:${server.address().port}/textus_render_demo/index.html?footnotes-off`);
+        await footnotesDisabled.waitForFunction(() => document.documentElement.dataset.textusRendered === 'true');
+        assert.equal(await footnotesDisabled.locator('link[href$="footnotes.css"]').count(), 0);
+        const originalLink = footnotesDisabled.locator('sup[id="fnref1"] > a');
+        await originalLink.hover();
+        assert.equal(await originalLink.getAttribute('aria-haspopup'), null);
+        assert.equal(await footnotesDisabled.locator('.textus-footnote-preview').count(), 0);
+        await originalLink.click();
+        assert.equal(new URL(footnotesDisabled.url()).hash, '#fn1');
+        await footnotesDisabled.close();
+        for (const options of [{javaScriptEnabled: false}, {hasTouch: true, isMobile: true}]) {
+            const fallback = await browser.newPage(options);
+            await fallback.goto(`http://127.0.0.1:${server.address().port}/textus_render_demo/index.html`);
+            if (options.hasTouch) await fallback.waitForFunction(() => document.documentElement.dataset.textusRendered === 'true');
+            const reference = fallback.locator('sup[id="fnref1"] > a');
+            if (options.hasTouch) await reference.tap();
+            else await reference.click();
+            assert.equal(new URL(fallback.url()).hash, '#fn1');
+            assert.equal(await fallback.locator('.textus-footnote-preview').count(), 0);
+            await fallback.close();
+        }
+        console.log('Whole-page rendering: SVG, math, CSS/JS, alerts, footnote previews (edges, scrolling, keyboard, touch, toggles), themes, nested pages, file/HTTP and no external requests passed.');
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));

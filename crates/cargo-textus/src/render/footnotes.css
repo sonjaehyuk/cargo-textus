@@ -1,0 +1,33 @@
+/* 투명 여백이 각주 표시와 미리보기 사이의 hover 통로를 만든다. 본문 스크롤은 잠그지 않는다. */
+.textus-footnote-preview {
+    position: fixed;
+    z-index: 100;
+    box-sizing: border-box;
+    padding: 8px;
+    text-align: start;
+    font-size: 1rem;
+    font-weight: normal;
+    line-height: 1.5;
+}
+/* 제한된 높이 안에서 긴 각주와 가로로 넓은 내용 모두 기본 스크롤 동작을 유지한다. */
+.textus-footnote-preview > .textus-footnote-body {
+    box-sizing: border-box;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    margin: 0;
+    padding: .75rem 1rem;
+    border: 1px solid var(--headings-border-bottom-color, #aaa);
+    border-radius: .4rem;
+    background: var(--main-background-color, white);
+    color: var(--main-color, #222);
+    box-shadow: 0 .25rem 1rem #0003;
+}
+.textus-footnote-body:focus-visible {
+    outline: 2px solid var(--link-color, #0969da);
+    outline-offset: 1px;
+}
+.textus-footnote-body > :last-child { margin-bottom: 0; }
+/* 인쇄할 때는 원래 각주만 남긴다. */
+@media print {
+    .textus-footnote-preview { display: none; }
+}

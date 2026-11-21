@@ -8,5 +8,6 @@ publish = false
 mermaid = true
 math = true
 alerts = true
+footnotes = true
 css = ["docs/custom.css"]
 js = ["docs/custom.js"]
