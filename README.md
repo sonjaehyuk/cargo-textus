@@ -51,6 +51,7 @@ languages = ["ja", "ko"] # It must be a list of lowercase ISO 639-1 codes.
 mermaid = true
 math = true
 alerts = true
+footnotes = true
 # It must be a list of relative paths base on the Cargo.toml file location.
 css = ["docs/custom.css"] 
 js = ["docs/custom.js"]
@@ -147,6 +148,32 @@ The existing `include_str!` will remain the default method for inserting languag
 Both the default path and directories are relative to the `Cargo.toml` of the calling package. The **full filename** of the default file is appended to the directory. For example, even if the default path is `docs/api/greet.md`, `ko = "docs/ko"` will select `docs/ko/greet.md`. Do not add the language code before the extension. A single trailing `/` in the directory is allowed. Absolute paths, empty directories, `..`, backslashes, and empty path segments are not permitted. The default file path requires a filename and extension, just like the existing macro.
 
 At least one mapping is required, and the keys must be actual assigned lowercase ISO 639-1 codes. Duplicate keys and invalid codes or paths will cause a compilation error even if that language is not selected. If there is no mapping for the selected language or the selected file does not exist, an error is raised and no automatic fallback occurs. If no language is selected, only the default file is included. The existence of files that are not selected is not checked.
+
+### Footnote previews
+
+Write standard rustdoc Markdown footnotes and build with `cargo textus build` or `cargo textus open`:
+
+```markdown
+See the details[^details].
+
+[^details]: Footnotes can include **formatting**, links, code, and multiple paragraphs.
+
+    Long notes remain scrollable inside the preview.
+```
+
+Hover over a footnote reference or focus it with the keyboard to open a preview.
+The preview stays within the visible viewport, moving to the left near the right edge
+or above/below on narrow screens. You can move the pointer into it, select text, follow
+links, and scroll long or wide content. The page remains scrollable.
+Press Tab or ArrowDown on the reference to enter the preview, and Escape to close it.
+Tab continues through preview links and back into the document without trapping focus.
+Clicking, pressing Enter, or tapping the original reference still jumps to the original footnote.
+
+Previews are enabled by default. Set `footnotes = false` under
+`[package.metadata.textus.render]` to disable them. They use rustdoc's generated footnote
+HTML and bundled local CSS/JS; no extra macros or network services are needed.
+Without JavaScript, the original footnotes remain available. Ordinary `cargo doc` does
+not add previews. See the [rendering design](docs/rustdoc-rendering-plan.md) for details and limitations.
 
 ## Development
 

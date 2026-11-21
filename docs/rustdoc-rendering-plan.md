@@ -1,6 +1,6 @@
 # 전체 rustdoc 렌더링
 
-상태: 작업 중심 CLI로 통합한 전체 페이지 렌더링 구현. 작업 브랜치는 `rustdoc-rendering`이다.
+상태: 작업 중심 CLI로 통합한 전체 페이지 렌더링 구현. Mermaid·수식·알림·각주 미리보기를 지원한다.
 이전 계획의 `doc_assets!`·`render_doc!` 개별 문서 매크로는 채택하지 않았다.
 
 ## 책임 분리
@@ -50,13 +50,14 @@ cargo run -p cargo-textus -- open -p textus-render-demo
 pub fn example() {}
 ````
 
-기본적으로 Mermaid·수식·알림이 활성화되며 설정은 선택 사항이다.
+기본적으로 Mermaid·수식·알림·각주 미리보기가 활성화되며 설정은 선택 사항이다.
 
 ```toml
 [package.metadata.textus.render]
 mermaid = true
 math = true
 alerts = true
+footnotes = true
 css = ["docs/custom.css"]
 js = ["docs/custom.js"]
 ```
@@ -104,10 +105,58 @@ CSS/JS를 추가로 작성할 필요 없이 전체 API 페이지의 문서 영�
 가져온 것은 아니며 [GitHub 알림 문법](https://docs.github.com/en/enterprise-cloud%40latest/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts)을
 브라우저 DOM에서 처리하는 방식이다. JS를 끄면 원래 마커와 인용문이 보인다.
 
-처리 순서는 알림 DOM 변환 → Mermaid·KaTeX → 사용자 JS이다. 알림 안의 그림과
+처리 순서는 알림 DOM 변환 → Mermaid·KaTeX → 각주 이벤트 연결 → 사용자 JS이다. 알림 안의 그림과
 수식에도 기존 렌더러가 적용된다. CSS는 사용자 CSS보다 먼저 로드한다. 별도의 외부 자산이나
 추가 의존성 없이 작동한다. 브라우저 테스트에서 다섯 종류, 일반 인용문 보존, 중첩 페이지,
 서식 보존, 토글 비활성화와 테마 전환을 검증한다.
+
+## 각주 미리보기
+
+표준 rustdoc Markdown 각주를 그대로 작성한다. `footnotes = true`가 기본값이며
+`false`로 설정하면 미리보기 이벤트와 CSS 로딩을 생략한다. 문자열 등 bool 이외의 값은
+다른 렌더링 설정과 마찬가지로 빌드 전 설정 오류가 된다. 새 매크로나 별도 의존성은 없다.
+
+```markdown
+보충 설명을 확인하세요[^detail].
+
+[^detail]: **강조**, [링크](https://example.com), `코드`를 포함할 수 있습니다.
+
+    여러 문단으로 된 긴 설명도 미리보기 안에서 스크롤할 수 있습니다.
+```
+
+각주 표시를 hover하거나 키보드로 포커스하면 미리보기가 열린다. 표시에 포인터나
+포커스가 남아 있거나 미리보기 안으로 이동한 동안 유지하며, 양쪽을 모두 떠나면 짧은
+유예 후 닫는다. 표시와 팝업 사이에는 hover 가능한 투명 여백을 두어 느리게 이동해도
+읽을 수 있다. Escape나 바깥쪽 클릭으로 닫을 수도 있다. 페이지 스크롤로 각주 표시가
+보이는 영역을 완전히 벗어나면 미리보기를 닫는다.
+
+각주 표시의 오른쪽에 충분한 공간이 있으면 오른쪽에, 없으면 왼쪽에 배치한다.
+양쪽이 좁으면 위·아래 중 공간이 넓은 쪽을 사용한다. 보이는 영역에서 8px 여백을 두고
+폭·높이를 제한하며, 창 크기·visual viewport·본문 크기·페이지 스크롤 변화에 맞춰
+재배치한다. rustdoc의 접기 영역은 `contain: layout`을 사용하므로 fixed 팝업을
+`body` 바로 아래에 두어 조상 요소의 좌표계나 잘림에 영향을 받지 않게 했다.
+
+본문은 `overflow: auto`로 세로·가로 스크롤을 허용한다. 페이지의 overflow를 변경하거나
+wheel·touch 이벤트를 취소하지 않으며, 포커스나 페이지 스크롤을 가두지 않는 **비모달 팝업**이다.
+참조의 Tab 또는 ArrowDown으로 미리보기 본문에 들어가 PageDown 등으로 스크롤할 수 있다.
+Tab은 내부 링크를 거쳐 원래 문서의 다음 요소로, 본문에서 Shift+Tab은 참조로 이동한다.
+Escape로 닫을 때 미리보기 안에 있던 포커스는 참조로 돌아간다. 팝업은 `role="dialog"`와
+각주 번호를 포함한 접근성 이름을 가지며 참조에는 확장 상태와 연결 정보를 제공한다.
+이 동작은 [W3C의 hover/focus 콘텐츠 지침](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)의
+닫기·hover 유지·내용 유지 원칙을 따른다. 스크린 리더 실기 검증은 아직 하지 않았다.
+
+구현 대상은 `.docblock` 안에서 `.footnotes > ol > li`를 가리키는 `sup[id] > a`이다.
+열 때 현재 각주 DOM을 복제하므로 링크·강조·목록·코드와 렌더링된 KaTeX·Mermaid를
+함께 표시한다. 되돌아가기 링크는 복제본에서만 제거한다. 복제본의 ID 및 SVG·ARIA 내부
+참조는 새 ID로 연결해 원본 문서의 앵커와 충돌하지 않게 한다. 원래 각주와 각주 표시는
+유지하며 클릭·Enter·터치는 원래 위치로 이동한다. JS가 없거나 설정을 끄면 기본 각주를 읽을 수 있다.
+인쇄 시 팝업은 숨긴다. 색상은 rustdoc의 밝은 테마·dark·ayu CSS 변수를 따른다.
+
+이는 Markdown 파서 확장이 아닌 rustdoc HTML에 대한 점진적 기능 추가다. 대상이 없거나
+잘못된 fragment인 링크는 건너뛰며 별도 빌드 오류를 내지 않는다. 다른 도구의 각주 HTML,
+사용자 JS로 나중에 추가한 참조, 복제 콘텐츠의 사용자 이벤트 리스너까지 지원하지 않는다.
+원본 각주 목록과 참조의 구조를 바꾸는 사용자 CSS/JS나 향후 rustdoc HTML 변경에는
+추가 검증이 필요하다. 최초 구현은 rustdoc 1.95.0과 Chromium 149에서 검증했다.
 
 ## i18n 조합과 빌드
 
@@ -174,6 +223,9 @@ Rust 테스트는 CLI 구분, 설정 검증, 기존 i18n 회귀, 전체 페이�
 기존 rustdoc 플래그 보존, 공백 경로와 사용자 자산 누락 오류를 검사한다.
 브라우저 테스트는 매크로 없는 예제의 크레이트·함수·중첩 타입 페이지에서 실제 SVG,
 수식 DOM, 사용자 CSS/JS, 코드 영역 보존 및 외부 요청 없음을 확인한다.
+각주 검증은 file/HTTP에서 서식·수식·SVG 복제, ID 충돌 방지, 네 모서리와 작은 화면,
+내부 세로·가로 및 페이지 스크롤, hover 유지, 키보드 이동, 기존 앵커 동작, 설정 비활성화,
+JS 비활성화, 터치, 테마·인쇄 처리를 포함한다.
 
 ```bash
 cargo test --workspace
@@ -182,6 +234,8 @@ cargo run -p cargo-textus -- build -p textus-render-demo --offline
 npm ci --prefix scripts/render-browser
 npx --prefix scripts/render-browser playwright install chromium
 node scripts/render-browser/test.cjs
+# 이미 설치된 Chromium 실행 파일을 사용할 수도 있다.
+CHROMIUM_EXECUTABLE_PATH=/path/to/chrome node scripts/render-browser/test.cjs
 ```
 
 다음 확장 후보는 전체 Mermaid 배포 지원, 런타임 설정 노출, 타깃 선택과 테마 변경
