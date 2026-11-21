@@ -6,6 +6,7 @@
     // 라이브러리 로딩 실패도 문서 본문은 그대로 남겨 읽을 수 있게 한다.
     const report = (error) => console.error("textus rendering:", error);
     __TEXTUS_ALERTS__
+    __TEXTUS_FOOTNOTES__
     const start = async () => {
         const root = document.querySelector('meta[name="rustdoc-vars"]')?.dataset.rootPath;
         if (root === undefined) { report("rustdoc root path is missing"); return; }
@@ -26,6 +27,7 @@
         };
         if (config.math) style("katex.css");
         if (config.alerts) style("alerts.css");
+        if (config.footnotes) style("footnotes.css");
         for (const name of config.css) style(name);
         const docs = [...document.querySelectorAll(".docblock")];
         if (config.alerts) renderAlerts(docs);
@@ -61,6 +63,8 @@
                 }
             })().catch(report),
         ]);
+        // 수식과 그림의 렌더링 결과까지 복제하도록 각주 이벤트는 내장 렌더링 후 연결한다.
+        if (config.footnotes) renderFootnotes(docs);
         // 사용자 자산은 내장 렌더링 처리 후 지정 순서대로 한 번씩 실행한다.
         for (const name of config.js) {
             try { await script(name); } catch (error) { report(error); }

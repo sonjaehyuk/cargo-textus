@@ -11,7 +11,7 @@ use crate::{cargo, cli::Options, config::Project};
 #[path = "render_assets.rs"]
 mod assets;
 
-/// 패키지 전체의 렌더링 설정. 생략하면 Mermaid·수식·알림을 활성화한다.
+/// 패키지 전체의 렌더링 설정. 생략하면 Mermaid·수식·알림·각주 미리보기를 활성화한다.
 /// 사용자 자산은 패키지 기준 파일로 명시하며 개별 문서 매크로에 의존하지 않는다.
 #[derive(Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -22,6 +22,8 @@ struct RenderConfig {
     math: bool,
     /// 최상위 blockquote의 GitHub 알림 마커를 제목·아이콘·강조 스타일로 표시한다.
     alerts: bool,
+    /// rustdoc 각주 링크의 hover와 키보드 포커스에 스크롤 가능한 미리보기를 표시한다.
+    footnotes: bool,
     /// 선언 순서대로 읽을 CSS 파일. 페이지 전체에 스타일이 적용된다.
     css: Vec<String>,
     /// 내장 렌더링 처리 후 선언 순서대로 실행할 JavaScript 파일.
@@ -29,12 +31,13 @@ struct RenderConfig {
 }
 
 impl Default for RenderConfig {
-    /// 설정 없이도 일반 주석의 그림과 수식을 처리하는 초기값.
+    /// 설정 없이도 일반 주석의 그림·수식·알림·각주를 처리하는 초기값.
     fn default() -> Self {
         Self {
             mermaid: true,
             math: true,
             alerts: true,
+            footnotes: true,
             css: Vec::new(),
             js: Vec::new(),
         }
@@ -75,6 +78,12 @@ pub fn build(
             include_str!("render/alerts.css"),
         )?;
     }
+    if config.footnotes {
+        fs::write(
+            staging.join("footnotes.css"),
+            include_str!("render/footnotes.css"),
+        )?;
+    }
     let package_root = project
         .manifest_path
         .parent()
@@ -83,7 +92,8 @@ pub fn build(
     stage_custom(&mut config.js, "js", package_root, &staging)?;
     let runtime = include_str!("render/runtime.js")
         .replace("__TEXTUS_CONFIG__", &serde_json::to_string(&config)?)
-        .replace("__TEXTUS_ALERTS__", include_str!("render/alerts.js"));
+        .replace("__TEXTUS_ALERTS__", include_str!("render/alerts.js"))
+        .replace("__TEXTUS_FOOTNOTES__", include_str!("render/footnotes.js"));
     let header = target.join("textus-header.html");
     fs::write(
         &header,
@@ -221,14 +231,17 @@ mod tests {
     #[test]
     fn configuration_defaults_and_errors() {
         let config: RenderConfig = serde_json::from_str("{}").unwrap();
-        assert!(config.mermaid && config.math && config.alerts);
-        let config: RenderConfig =
-            serde_json::from_str(r#"{"math":false,"alerts":false,"js":["a.js"]}"#).unwrap();
-        assert!(config.mermaid && !config.math && !config.alerts);
+        assert!(config.mermaid && config.math && config.alerts && config.footnotes);
+        let config: RenderConfig = serde_json::from_str(
+            r#"{"math":false,"alerts":false,"footnotes":false,"js":["a.js"]}"#,
+        )
+        .unwrap();
+        assert!(config.mermaid && !config.math && !config.alerts && !config.footnotes);
         assert_eq!(config.js, ["a.js"]);
         for json in [
             r#"{"math":"yes"}"#,
             r#"{"alerts":"true"}"#,
+            r#"{"footnotes":"true"}"#,
             r#"{"unknown":true}"#,
             r#"{"css":"a.css"}"#,
         ] {

@@ -344,6 +344,140 @@ fn directory_documents_rebuild_and_report_missing_mappings_and_files() {
 }
 
 #[test]
+fn inline_documents_track_language_changes_without_files_and_keep_cli_registration_separate() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.root.join("src/lib.rs"),
+        r##"#![doc = cargo_textus::localized_str!(
+    "Default **inline** marker.",
+    ko = r#"한국어 직접 문서 표식.
+
+두 번째 문단과 `코드`."#,
+    en = "English inline marker.",
+    as = "অসমীয়া inline marker.",
+)]
+#[doc = cargo_textus::localized_str!("Default item.", ko = "한국어 항목.", en = "English item.", as = "অসমীয়া item.")]
+pub struct Inline;
+"##,
+    )
+    .unwrap();
+    fs::remove_dir_all(fixture.root.join("docs")).unwrap();
+    let original_source = fs::read(fixture.root.join("src/lib.rs")).unwrap();
+    let original_manifest = fs::read(fixture.root.join("Cargo.toml")).unwrap();
+
+    // Reuse one target without cleaning: TEXTUS_LANG must be tracked by Cargo,
+    // including switching to and from the default and a Rust keyword language key.
+    let variants = [
+        (None, "Default <strong>inline</strong> marker."),
+        (Some("ko"), "한국어 직접 문서 표식."),
+        (Some("en"), "English inline marker."),
+        (Some("as"), "অসমীয়া inline marker."),
+        (None, "Default <strong>inline</strong> marker."),
+    ];
+    for (language, marker) in variants {
+        success(fixture.cargo_doc(language));
+        let html = fixture.html(None, "index.html");
+        assert!(html.contains(marker), "{language:?}");
+        for (_, other) in variants {
+            if other != marker {
+                assert!(!html.contains(other), "unexpected {other} for {language:?}");
+            }
+        }
+    }
+    failure(fixture.cargo_doc(Some("zz")), "invalid ISO 639-1");
+    failure(
+        fixture.cargo_doc(Some("ja")),
+        "no document string registered",
+    );
+
+    // Macro mappings do not register CLI languages, and registered languages
+    // still use the same whole-page rendering pipeline as file-backed documents.
+    assert_eq!(
+        success(fixture.cli(&["languages"]).output().unwrap()).stdout,
+        b"en\nko\n"
+    );
+    failure(
+        fixture.cli(&["build", "--lang", "as"]).output().unwrap(),
+        "not registered",
+    );
+    let checked = success(fixture.cli(&["check"]).output().unwrap());
+    assert!(
+        String::from_utf8_lossy(&checked.stdout).contains("Checked 3 documentation variant(s)")
+    );
+    let default_html = fs::read_to_string(
+        fixture
+            .root
+            .join("target/textus/fixture/default/doc/fixture/index.html"),
+    )
+    .unwrap();
+    assert!(default_html.contains("Default <strong>inline</strong> marker."));
+    let korean = fixture.html(Some("ko"), "index.html");
+    assert!(korean.contains("한국어 직접 문서 표식."));
+    assert!(korean.contains("두 번째 문단과 <code>코드</code>"));
+    assert!(korean.contains("data-textus-render"));
+    assert!(
+        fixture
+            .html(Some("ko"), "struct.Inline.html")
+            .contains("한국어 항목.")
+    );
+    assert!(
+        fixture
+            .html(Some("en"), "index.html")
+            .contains("English inline marker.")
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("src/lib.rs")).unwrap(),
+        original_source
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("Cargo.toml")).unwrap(),
+        original_manifest
+    );
+
+    fs::write(
+        fixture.root.join("src/lib.rs"),
+        r#"#![doc = cargo_textus::localized_str!("Default", en = "English")]
+"#,
+    )
+    .unwrap();
+    failure(
+        fixture.cli(&["check", "--lang", "ko"]).output().unwrap(),
+        "no document string registered",
+    );
+}
+
+#[test]
+fn inline_macro_reports_invalid_unused_mappings_and_nonliteral_input() {
+    let fixture = Fixture::new();
+    for (input, message) in [
+        (r#""Default""#, "at least one language string mapping"),
+        (
+            r#""Default", ko = "한국어", zz = "invalid""#,
+            "invalid ISO 639-1",
+        ),
+        (
+            r#""Default", ko = "한국어", KO = "invalid""#,
+            "invalid ISO 639-1",
+        ),
+        (
+            r#""Default", ko = "one", r#ko = "two""#,
+            "duplicate language string mapping",
+        ),
+        (
+            r#""Default", ko = concat!("한", "국어")"#,
+            "expected string literal",
+        ),
+    ] {
+        fs::write(
+            fixture.root.join("src/lib.rs"),
+            format!("#![doc = cargo_textus::localized_str!({input})]\n"),
+        )
+        .unwrap();
+        failure(fixture.cargo_doc(None), message);
+    }
+}
+
+#[test]
 fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
     let fixture = Fixture::new();
     fs::create_dir(fixture.root.join("extra assets")).unwrap();
@@ -378,6 +512,7 @@ fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
         assert!(html.contains("한국어 문서 표식"));
     }
     assert!(doc.join("textus-assets/mermaid.js").is_file());
+    assert!(doc.join("textus-assets/footnotes.css").is_file());
     assert!(
         doc.join("textus-assets/fonts/KaTeX_Main-Regular.woff2")
             .is_file()
@@ -398,13 +533,14 @@ fn rendering_is_global_preserves_flags_and_composes_with_i18n() {
         fixture.root.join("Cargo.toml"),
         manifest.replace(
             "[package.metadata.textus.render]",
-            "[package.metadata.textus.render]\nalerts = false",
+            "[package.metadata.textus.render]\nalerts = false\nfootnotes = false",
         ),
     )
     .unwrap();
     success(command.output().unwrap());
     let html = fs::read_to_string(doc.join("fixture/index.html")).unwrap();
     assert!(html.contains("\"alerts\":false"));
+    assert!(html.contains("\"footnotes\":false"));
 }
 
 #[cfg(unix)]

@@ -1,9 +1,10 @@
-//! 사용자가 명시적으로 선택한 문서 파일을 포함하는 절차적 매크로 라이브러리.
+//! 사용자가 직접 작성한 문서 파일이나 문자열을 언어별로 선택하는 절차적 매크로 라이브러리.
 //!
 //! 기본 방식인 [`include_str!`]는 `docs/guide.md`에서 `docs/guide.ko.md`를 선택한다.
 //! [`include_str_from_dir!`]는 언어별로 지정한 디렉토리에서 같은 이름의 파일을 선택한다.
-//! 두 방식 모두 호출 패키지의 `Cargo.toml`을 경로 기준으로 사용하며 Rust 기본 매크로나
-//! `doc` 속성의 의미를 바꾸지 않는다. 자동 번역과 묵시적 언어 대체는 수행하지 않는다.
+//! 두 파일 방식은 호출 패키지의 `Cargo.toml`을 경로 기준으로 사용한다.
+//! [`localized_str!`]는 파일 없이 기본 문자열과 언어별 문자열 중 하나를 선택한다.
+//! Rust 기본 매크로나 `doc` 속성의 의미를 바꾸지 않으며 자동 번역과 묵시적 언어 대체는 수행하지 않는다.
 //!
 //! 같은 패키지의 CLI는 기본 활성화된 `cli` feature로 제공된다. 매크로만 사용하는
 //! 프로젝트는 `default-features = false`로 CLI 전용 의존성을 제외할 수 있다.
@@ -50,6 +51,7 @@ pub fn include_str(input: TokenStream) -> TokenStream {
 }
 
 mod directory;
+mod localized;
 
 /// 명시한 언어별 디렉토리에서 기본 파일과 이름이 같은 문서를 포함한다.
 ///
@@ -75,4 +77,32 @@ mod directory;
 #[proc_macro]
 pub fn include_str_from_dir(input: TokenStream) -> TokenStream {
     directory::expand(input, LANGUAGE)
+}
+
+/// 기본 문서 문자열 또는 선택 언어에 연결된 문자열을 그대로 반환한다.
+///
+/// 기본 문자열 뒤에 하나 이상의 `언어 = "문서 내용"` 매핑을 받는다. 일반 문자열과
+/// 여러 줄 raw 문자열 리터럴을 허용하며 빈 문자열과 공백도 내용으로 보존한다.
+/// 변수·상수·`concat!` 등 리터럴 이외의 표현식은 받지 않는다. 파일 읽기는 수행하지 않는다.
+///
+/// ```
+/// #[doc = cargo_textus::localized_str!(
+///     "Default documentation.",
+///     ko = "한국어 문서입니다.",
+///     en = r#"English documentation with **Markdown**."#,
+/// )]
+/// pub fn example() {}
+/// ```
+///
+/// 언어 미선택 시 기본 문자열을 사용하며 `#[doc = ...]`와 일반 `&'static str`
+/// 표현식에서 모두 쓸 수 있다. 문서에 쓰면 선택한 문자열의 Markdown은 rustdoc이 처리한다.
+/// 모든 키는 중복 없는 소문자 ISO 639-1 코드여야 한다. `as`처럼 Rust 예약어와 같은
+/// 코드도 허용하며 raw 식별자 `r#as`와 `as`는 같은 코드다. 선택하지 않은 매핑도 검증한다.
+///
+/// 잘못된 코드·중복 키·빈 매핑 목록이나 선택 언어의 매핑 누락은 컴파일 오류이며
+/// 기본 문자열로 자동 대체하지 않는다. CLI에서 선택할 언어는 별도로
+/// `package.metadata.textus.i18n.languages`에 등록해야 하며 매크로가 자동 등록하지 않는다.
+#[proc_macro]
+pub fn localized_str(input: TokenStream) -> TokenStream {
+    localized::expand(input, LANGUAGE)
 }
